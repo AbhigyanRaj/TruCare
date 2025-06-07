@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { auth } from '../config/firebase';
+import { auth, db } from '../config/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
 
 const AuthContext = createContext();
 
@@ -10,15 +11,25 @@ export const useAuth = () => {
 
 export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
+  const [userRole, setUserRole] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
+      
+      if (user) {
+        // Fetch user role from Firestore
+        const userDoc = await getDoc(doc(db, 'userProfiles', user.uid));
+        if (userDoc.exists()) {
+          setUserRole(userDoc.data().role);
+        }
+      } else {
+        setUserRole(null);
+      }
+      
       setLoading(false);
     });
-
-    // Cleanup subscription on unmount
     return unsubscribe;
   }, []);
 
@@ -28,6 +39,7 @@ export const AuthProvider = ({ children }) => {
 
   const value = {
     currentUser,
+    userRole,
     logout,
   };
 

@@ -1,8 +1,19 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { FiPhone } from 'react-icons/fi'
 import ChatBot from '../chatbot/ChatBot';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 
 const Home = () => {
+  const navigate = useNavigate();
+  const { currentUser } = useAuth();
+
+  useEffect(() => {
+    if (currentUser) {
+      navigate('/dashboard');
+    }
+  }, [currentUser, navigate]);
+
   return (
     <div className="bg-green-50 h-[90vh] flex flex-col items-center justify-center relative">
       <div className="container mx-auto px-4 py-16 sm:px-6 lg:px-8">

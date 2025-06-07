@@ -8,22 +8,28 @@ import {
 } from 'firebase/auth';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext.jsx';
+import { FaUserMd, FaUser, FaGoogle, FaPhone } from 'react-icons/fa';
+import { db } from '../config/firebase';
+import { doc, setDoc } from 'firebase/firestore';
+import { storage } from '../config/firebase';
+import { ref, uploadBytes } from 'firebase/storage';
+import { saveUserProfile, isEmailRoleConflict } from '../services/firestore';
 
 function AuthPage() {
-  const [method, setMethod] = useState('phone'); // 'phone', 'google'
+  const [method, setMethod] = useState('phone');
+  const [userType, setUserType] = useState('patient');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [otp, setOtp] = useState('');
   const [verificationId, setVerificationId] = useState(null);
   const [recaptchaVerifier, setRecaptchaVerifier] = useState(null);
   const [error, setError] = useState(null);
-  const [confirmationResultObj, setConfirmationResultObj] = useState(null); // State to store confirmationResult object
+  const [confirmationResultObj, setConfirmationResultObj] = useState(null); 
 
   const navigate = useNavigate();
   const { currentUser } = useAuth();
 
   useEffect(() => {
     if (currentUser) {
-      // If user is already logged in, redirect to dashboard
       navigate('/dashboard');
     }
   }, [currentUser, navigate]);
@@ -73,10 +79,20 @@ function AuthPage() {
     setError(null);
     try {
       if (confirmationResultObj) {
-        await confirmationResultObj.confirm(otp);
-        console.log('Phone number verified!');
-        // Redirect or update UI on successful login/signup
-        navigate('/dashboard');
+        const result = await confirmationResultObj.confirm(otp);
+        // Check for email-role conflict
+        const conflict = await isEmailRoleConflict(result.user.email, userType);
+        if (conflict) {
+          setError('This email is already registered with a different role. Please use the correct role or a different email.');
+          return;
+        }
+        await saveUserProfile(result.user, userType);
+        // Redirect based on user type
+        if (userType === 'doctor') {
+          navigate('/dashboard/doctor');
+        } else {
+          navigate('/dashboard');
+        }
       } else {
         setError("Please send OTP first.");
       }
@@ -90,14 +106,29 @@ function AuthPage() {
     setError(null);
     try {
       const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
-      console.log('User signed in with Google!');
-      // Redirect or update UI on successful login/signup
-      navigate('/dashboard');
+      const result = await signInWithPopup(auth, provider);
+      // Check for email-role conflict
+      const conflict = await isEmailRoleConflict(result.user.email, userType);
+      if (conflict) {
+        setError('This email is already registered with a different role. Please use the correct role or a different email.');
+        return;
+      }
+      await saveUserProfile(result.user, userType);
+      // Redirect based on user type
+      if (userType === 'doctor') {
+        navigate('/dashboard/doctor');
+      } else {
+        navigate('/dashboard');
+      }
     } catch (error) {
       setError(error.message);
       console.error('Google auth error:', error);
     }
+  };
+
+  // Update user type selection handler
+  const handleUserTypeChange = (type) => {
+    setUserType(type);
   };
 
   // If currentUser exists, don't render the auth page to prevent flickering before redirect
@@ -106,91 +137,120 @@ function AuthPage() {
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8 bg-white p-10 rounded-xl shadow-lg">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Sign In or Sign Up
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-green-100 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-2xl shadow-xl">
+        {/* Header */}
+        <div className="text-center">
+          <h2 className="text-3xl font-bold text-gray-900">
+            Welcome to TruCare
           </h2>
+          <p className="mt-2 text-sm text-gray-600">
+            Choose how you'd like to continue
+          </p>
         </div>
 
-        <p className="mt-2 text-center text-sm text-gray-600">
-          Phone verification is currently under development. Please use Google sign-in for now.
-        </p>
-
-        {/* Method Switcher - Keep only Phone and maybe Email/Password if re-added */}
-        <div className="flex justify-center space-x-4 mb-6">
-           <button
-            onClick={() => setMethod('phone')}
-            className={`py-2 px-4 rounded-md text-sm font-medium ${
-              method === 'phone' ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+        {/* User Type Selector */}
+        <div className="grid grid-cols-2 gap-4">
+          <button
+            onClick={() => handleUserTypeChange('patient')}
+            className={`flex items-center justify-center space-x-2 py-3 px-4 rounded-xl text-sm font-medium transition-all duration-200 ${
+              userType === 'patient' 
+                ? 'bg-green-50 text-green-700 border-2 border-green-500' 
+                : 'bg-gray-50 text-gray-600 border-2 border-transparent hover:bg-gray-100'
             }`}
           >
-            Phone
+            <FaUser className="text-lg" />
+            <span>Patient</span>
           </button>
-           {/* Email/Password button removed */}
+          <button
+            onClick={() => handleUserTypeChange('doctor')}
+            className={`flex items-center justify-center space-x-2 py-3 px-4 rounded-xl text-sm font-medium transition-all duration-200 ${
+              userType === 'doctor' 
+                ? 'bg-green-50 text-green-700 border-2 border-green-500' 
+                : 'bg-gray-50 text-gray-600 border-2 border-transparent hover:bg-gray-100'
+            }`}
+          >
+            <FaUserMd className="text-lg" />
+            <span>Doctor</span>
+          </button>
         </div>
 
-        {method === 'phone' && (
-          <form onSubmit={verificationId ? handleVerifyOtp : handlePhoneAuth} className="mt-8 space-y-6">
-            <div className="rounded-md shadow-sm -space-y-px">
-              <div>
-                <label htmlFor="phone-number" className="sr-only">Phone Number</label>
-                <input
-                  id="phone-number"
-                  name="phone-number"
-                  type="tel"
-                  autoComplete="tel"
-                  required
-                  className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-green-500 focus:border-green-500 focus:z-10 sm:text-sm"
-                  placeholder="Phone Number (e.g., +91 934567890)"
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
-                  disabled={!!verificationId}
-                />
-              </div>
-              {verificationId && (
-                <div>
-                  <label htmlFor="otp" className="sr-only">OTP</label>
+        {/* Role Description */}
+        <p className="text-center text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
+          {userType === 'doctor' 
+            ? 'Sign in as a healthcare professional to provide care and support'
+            : 'Sign in as a patient to access mental health support and resources'}
+        </p>
+
+        {/* Auth Methods */}
+        <div className="space-y-4">
+          <button
+            onClick={handleGoogleAuth}
+            className="w-full flex items-center justify-center space-x-3 py-3 px-4 rounded-xl text-sm font-medium bg-white border-2 border-gray-200 hover:bg-gray-50 transition-all duration-200"
+          >
+            <FaGoogle className="text-lg text-red-500" />
+            <span>Continue with Google</span>
+          </button>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-200"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-white text-gray-500">or</span>
+            </div>
+          </div>
+
+          {method === 'phone' && (
+            <>
+              <p className="text-sm text-gray-500 text-center italic">Phone signup is currently under development. Please use Google sign-in.</p>
+              <form onSubmit={verificationId ? handleVerifyOtp : handlePhoneAuth} className="space-y-4">
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <FaPhone className="text-gray-400" />
+                  </div>
                   <input
-                    id="otp"
-                    name="otp"
-                    type="text"
+                    type="tel"
                     required
-                    className="appearance-none rounded-none relative block w-3/4 px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-green-500 focus:border-green-500 focus:z-10 sm:text-sm"
-                    placeholder="OTP"
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value)}
+                    className="block w-full pl-10 pr-3 py-3 border-2 border-gray-200 rounded-xl text-sm placeholder-gray-400 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
+                    placeholder="Phone Number (e.g., +91 934567890)"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    disabled={!!verificationId}
                   />
                 </div>
-              )}
-            </div>
+                
+                {verificationId && (
+                  <div className="relative">
+                    <input
+                      type="text"
+                      required
+                      className="block w-full pl-3 pr-3 py-3 border-2 border-gray-200 rounded-xl text-sm placeholder-gray-400 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
+                      placeholder="Enter OTP"
+                      value={otp}
+                      onChange={(e) => setOtp(e.target.value)}
+                    />
+                  </div>
+                )}
 
-            {error && <p className="mt-2 text-center text-sm text-red-600">{error}</p>}
+                {error && (
+                  <p className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">
+                    {error}
+                  </p>
+                )}
 
-            <div>
-              <button
-                type="submit"
-                className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-              >
-                {verificationId ? 'Verify OTP' : 'Send OTP'}
-              </button>
-            </div>
-          </form>
-        )}
-
-        {/* Google Sign-in Button - Always visible */}
-        <div className="mt-6">
-           <button
-              onClick={handleGoogleAuth}
-              className="group relative w-full flex justify-center py-2 px-4 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-           >
-              Sign in with Google
-           </button>
+                <button
+                  type="submit"
+                  className="w-full flex items-center justify-center space-x-2 py-3 px-4 rounded-xl text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200"
+                >
+                  {verificationId ? 'Verify OTP' : 'Send OTP'}
+                </button>
+              </form>
+            </>
+          )}
         </div>
 
-         <div id="recaptcha-container"></div> {/* ReCAPTCHA container */}
-
+        <div id="recaptcha-container"></div>
       </div>
     </div>
   );
