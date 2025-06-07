@@ -1,127 +1,329 @@
-import React from 'react';
-import { Link } from 'react-router-dom'; // Assuming you might add links later
-import { MdAssessment, MdBookOnline, MdChat, MdCall, MdPerson, MdAssignment } from 'react-icons/md'; // Example icons
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { FaComments, FaCalendarAlt, FaStar } from 'react-icons/fa';
+import { getAllDoctors, scheduleChat, createOrGetChat, sendMessageToChat, listenForChatMessages } from '../services/firestore';
 
-// Note: If you don't have react-icons installed, run: npm install react-icons
+const Dashboard = () => {
+  const { currentUser } = useAuth();
+  const [doctors, setDoctors] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedDoctor, setSelectedDoctor] = useState(null);
+  const [showChatModal, setShowChatModal] = useState(false);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState('');
+  const [scheduleTime, setScheduleTime] = useState('');
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [scheduleSuccess, setScheduleSuccess] = useState(false);
+  const [scheduleError, setScheduleError] = useState('');
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatListener, setChatListener] = useState(null);
+  const [scheduledChats, setScheduledChats] = useState([]);
 
-function Dashboard() {
+  useEffect(() => {
+    const fetchDoctors = async () => {
+      setLoading(true);
+      try {
+        const docs = await getAllDoctors();
+        setDoctors(docs);
+      } catch (err) {
+        setDoctors([]);
+      }
+      setLoading(false);
+    };
+    fetchDoctors();
+  }, []);
+
+  const handleStartChat = (doctor) => {
+    setSelectedDoctor(doctor);
+    setShowChatModal(true);
+  };
+
+  const handleScheduleChat = (doctor) => {
+    setSelectedDoctor(doctor);
+    setShowScheduleModal(true);
+  };
+
+  // Helper to get chatId: use scheduled chat's Firestore ID if available, else fallback
+  const getChatId = () => {
+    if (selectedDoctor && currentUser) {
+      const scheduledChat = scheduledChats && scheduledChats.find(
+        chat => chat.doctorId === selectedDoctor.id && chat.patientId === currentUser.uid
+      );
+      if (scheduledChat) return scheduledChat.id;
+      return `${selectedDoctor.id}_${currentUser.uid}`;
+    }
+    return '';
+  };
+
+  // Listen for messages when chat modal opens
+  useEffect(() => {
+    if (showChatModal && selectedDoctor && currentUser) {
+      const chatId = getChatId();
+      const participants = [selectedDoctor.id, currentUser.uid];
+      setChatMessages([]);
+      setChatLoading(true);
+      createOrGetChat(chatId, participants).then(() => {
+        const unsub = listenForChatMessages(chatId, (msgs) => {
+          setChatMessages(msgs);
+          setChatLoading(false);
+        });
+        setChatListener(() => unsub);
+      });
+      return () => {
+        if (chatListener) chatListener();
+      };
+    }
+    // eslint-disable-next-line
+  }, [showChatModal, selectedDoctor, currentUser]);
+
+  const handleSendMessage = async () => {
+    if (!chatInput.trim()) return;
+    setChatLoading(true);
+    const chatId = getChatId();
+    await sendMessageToChat(chatId, {
+      senderId: currentUser.uid,
+      senderRole: 'patient',
+      senderName: currentUser.displayName || currentUser.email || 'Unknown Patient',
+      text: chatInput,
+      timestamp: new Date(),
+    });
+    setChatInput('');
+    setChatLoading(false);
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-4xl font-extrabold text-gray-900 mb-6">Welcome to Your Dashboard</h1>
-        <p className="text-lg text-gray-600 mb-10">Explore the tools and resources available to support your well-being.</p>
-
-        {/* Feature Sections Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-
-          {/* Intro level Assessment Test */}
-          <div className="bg-white overflow-hidden shadow-lg rounded-xl hover:shadow-xl transition duration-300 ease-in-out flex flex-col">
-            <div className="p-8 flex-grow">
-               <div className="flex items-center mb-4">
-                 <div className="flex-shrink-0 bg-green-100 rounded-md p-3">
-                   <MdAssessment className="h-6 w-6 text-green-600" aria-hidden="true" />
-                 </div>
-                 <h2 className="ml-4 text-xl font-semibold text-gray-900">Assessment Test</h2>
-               </div>
-              <p className="text-gray-600 mt-2">Start with an introductory assessment to understand your current state and get personalized insights.</p>
-            </div>
-             <div className="p-8 bg-gray-50">
-               <Link to="/dashboard/assessment" className="w-full inline-flex items-center justify-center px-6 py-3 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
-                 Take Test
-               </Link>
-             </div>
-          </div>
-
-          {/* Book Counsellor */}
-          <div className="bg-white overflow-hidden shadow-lg rounded-xl hover:shadow-xl transition duration-300 ease-in-out flex flex-col">
-            <div className="p-8 flex-grow">
-              <div className="flex items-center mb-4">
-                 <div className="flex-shrink-0 bg-green-100 rounded-md p-3">
-                   <MdBookOnline className="h-6 w-6 text-green-600" aria-hidden="true" />
-                 </div>
-                 <h2 className="ml-4 text-xl font-semibold text-gray-900">Book a Counsellor</h2>
-               </div>
-              <p className="text-gray-600 mt-2">Find and book sessions with professional counsellors based on their availability and your needs.</p>
-            </div>
-             <div className="p-8 bg-gray-50">
-              <Link to="/dashboard/counsellors" className="w-full inline-flex items-center justify-center px-6 py-3 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
-                Book Now
-              </Link>
-             </div>
-          </div>
-
-          {/* Chat Option (Bot API linked) */}
-          <div className="bg-white overflow-hidden shadow-lg rounded-xl hover:shadow-xl transition duration-300 ease-in-out flex flex-col">
-             <div className="p-8 flex-grow">
-               <div className="flex items-center mb-4">
-                 <div className="flex-shrink-0 bg-green-100 rounded-md p-3">
-                   <MdChat className="h-6 w-6 text-green-600" aria-hidden="true" />
-                 </div>
-                 <h2 className="ml-4 text-xl font-semibold text-gray-900">Chat Support</h2>
-               </div>
-              <p className="text-gray-600 mt-2">Get instant support through our AI chat bot or connect with a counsellor via text.</p>
-             </div>
-             <div className="p-8 bg-gray-50">
-              <Link to="/dashboard/chat" className="w-full inline-flex items-center justify-center px-6 py-3 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
-                Start Chat
-              </Link>
-             </div>
-          </div>
-
-          {/* Voice Call Option */}
-          <div className="bg-white overflow-hidden shadow-lg rounded-xl hover:shadow-xl transition duration-300 ease-in-out flex flex-col">
-            <div className="p-8 flex-grow">
-               <div className="flex items-center mb-4">
-                 <div className="flex-shrink-0 bg-gray-200 rounded-md p-3">
-                   <MdCall className="h-6 w-6 text-gray-600" aria-hidden="true" />
-                 </div>
-                 <h2 className="ml-4 text-xl font-semibold text-gray-900">Voice Call Support</h2>
-               </div>
-              <p className="text-gray-600 mt-2">Connect with a counsellor for a voice conversation when you need to talk.</p>
-            </div>
-            <div className="p-8 bg-gray-50">
-              <button className="w-full inline-flex items-center justify-center px-6 py-3 border border-transparent rounded-md shadow-sm text-base font-medium text-gray-500 bg-gray-300 cursor-not-allowed">Call Now (Coming Soon)</button>
-            </div>
-          </div>
-
-          {/* In Person Meet Option */}
-          <div className="bg-white overflow-hidden shadow-lg rounded-xl hover:shadow-xl transition duration-300 ease-in-out flex flex-col">
-            <div className="p-8 flex-grow">
-              <div className="flex items-center mb-4">
-                 <div className="flex-shrink-0 bg-gray-200 rounded-md p-3">
-                   <MdPerson className="h-6 w-6 text-gray-600" aria-hidden="true" />
-                 </div>
-                 <h2 className="ml-4 text-xl font-semibold text-gray-900">In-Person Meetings</h2>
-               </div>
-              <p className="text-gray-600 mt-2">Schedule a face-to-face meeting with a counsellor in your area.</p>
-            </div>
-            <div className="p-8 bg-gray-50">
-              <button className="w-full inline-flex items-center justify-center px-6 py-3 border border-transparent rounded-md shadow-sm text-base font-medium text-gray-500 bg-gray-300 cursor-not-allowed">Meet In Person (Coming Soon)</button>
-            </div>
-          </div>
-
-          {/* Test yourself/Depression/Anxiety and other multiple things tests */}
-          <div className="bg-white overflow-hidden shadow-lg rounded-xl hover:shadow-xl transition duration-300 ease-in-out flex flex-col">
-             <div className="p-8 flex-grow">
-               <div className="flex items-center mb-4">
-                 <div className="flex-shrink-0 bg-green-100 rounded-md p-3">
-                   <MdAssignment className="h-6 w-6 text-green-600" aria-hidden="true" />
-                 </div>
-                 <h2 className="ml-4 text-xl font-semibold text-gray-900">Self-Assessment Tests</h2>
-               </div>
-              <p className="text-gray-600 mt-2">Access a variety of self-assessment tests to help you understand and track your mental well-being.</p>
-             </div>
-             <div className="p-8 bg-gray-50">
-              <Link to="/dashboard/tests" className="w-full inline-flex items-center justify-center px-6 py-3 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
-                View Tests
-              </Link>
-            </div>
-          </div>
-
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        {/* Welcome Section */}
+        <div className="mb-12">
+          <h1 className="text-3xl font-light text-gray-900">
+            Welcome back, <span className="font-medium">{currentUser?.displayName || 'Patient'}</span>
+          </h1>
+          <p className="mt-2 text-gray-500">
+            Connect with our mental health professionals
+          </p>
         </div>
+
+        {/* Available Doctors Section */}
+        <div className="space-y-8">
+          <h2 className="text-xl font-light text-gray-900">
+            Available Doctors
+          </h2>
+          {loading ? (
+            <div className="text-center text-gray-500 py-12">Loading doctors...</div>
+          ) : doctors.length === 0 ? (
+            <div className="text-center text-gray-500 py-12">No doctors are available at the moment.</div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {doctors.map((doctor) => (
+                <div 
+                  key={doctor.id} 
+                  className="group bg-white rounded-xl border border-gray-100 hover:border-green-100 transition-all duration-200 overflow-hidden flex flex-col justify-center h-full"
+                >
+                  <div className="flex flex-col items-center justify-center h-full p-6">
+                    <img
+                      src={doctor.image || 'https://ui-avatars.com/api/?name=Unknown+Doctor&background=E5E7EB&color=374151'}
+                      alt={doctor.displayName || doctor.email || 'Unknown Doctor'}
+                      className="w-16 h-16 rounded-full object-cover ring-2 ring-green-50 mb-4"
+                    />
+                    <h3 className="text-lg font-medium text-gray-900 text-center">{doctor.displayName || doctor.name || doctor.email || 'Unknown Doctor'}</h3>
+                    <p className="text-sm text-gray-500 text-center mb-2">{doctor.specialization || 'Unknown'}</p>
+                    <div className="flex items-center text-sm text-gray-500 justify-center mb-1">
+                      <FaStar className="text-yellow-400 mr-1" />
+                      <span>{doctor.rating !== undefined && doctor.rating !== null ? doctor.rating : '—'}</span>
+                      <span className="mx-2">•</span>
+                      <span>{doctor.experience || '—'}</span>
+                    </div>
+                    <p className="text-sm text-gray-500 text-center mb-4">{doctor.availability || 'Availability: Unknown'}</p>
+                    <div className="flex space-x-3 w-full mt-auto">
+                      <button
+                        onClick={() => handleStartChat(doctor)}
+                        className="flex-1 flex items-center justify-center space-x-2 bg-green-600 text-white px-4 py-2.5 rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+                      >
+                        <FaComments className="text-sm" />
+                        <span>Chat Now</span>
+                      </button>
+                      <button
+                        onClick={() => handleScheduleChat(doctor)}
+                        className="flex-1 flex items-center justify-center space-x-2 bg-white text-green-600 border border-green-200 px-4 py-2.5 rounded-lg hover:bg-green-50 transition-colors text-sm font-medium"
+                      >
+                        <FaCalendarAlt className="text-sm" />
+                        <span>Schedule</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Chat Modal */}
+        {showChatModal && selectedDoctor && (
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-3xl p-0 max-w-md w-full shadow-2xl flex flex-col h-[580px] overflow-hidden">
+              {/* Chat Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-green-600 text-white rounded-t-3xl">
+                <div className="flex items-center space-x-3">
+                  <img
+                    src={selectedDoctor.image || 'https://ui-avatars.com/api/?name=Unknown+Doctor&background=E5E7EB&color=374151'}
+                    alt={selectedDoctor.displayName || selectedDoctor.name || selectedDoctor.email || 'Unknown Doctor'}
+                    className="w-12 h-12 rounded-full object-cover ring-2 ring-white ring-opacity-50"
+                  />
+                  <div>
+                    <h3 className="text-xl font-semibold">
+                      {selectedDoctor.displayName || selectedDoctor.name || selectedDoctor.email || 'Unknown Doctor'}
+                    </h3>
+                    <p className="text-sm text-green-100">{selectedDoctor.specialization || 'Doctor'}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowChatModal(false)}
+                  className="text-white hover:text-green-100 transition-colors"
+                >
+                  <span className="sr-only">Close</span>
+                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              {/* Chat Body */}
+              <div className="flex-1 overflow-y-auto bg-gray-50 px-4 py-6 flex flex-col space-y-4">
+                {chatLoading ? (
+                  <div className="text-center text-gray-400 py-8">Loading messages...</div>
+                ) : chatMessages.length === 0 ? (
+                  <div className="text-center text-gray-400 py-8">No messages yet. Start the conversation!</div>
+                ) : (
+                  chatMessages.map(msg => (
+                    <div key={msg.id} className={`flex ${msg.senderId === currentUser.uid ? 'justify-end' : 'justify-start'}`}> 
+                      <div className={`max-w-[70%] px-4 py-2 rounded-2xl shadow-sm text-sm break-words ${msg.senderId === currentUser.uid ? 'bg-green-600 text-white rounded-br-none' : 'bg-white text-gray-900 border border-gray-200 rounded-bl-none'}`}>
+                        <div>{msg.text}</div>
+                        <div className={`text-xs mt-1 ${msg.senderId === currentUser.uid ? 'text-green-200 text-right' : 'text-gray-500 text-left'}`}>{msg.timestamp && new Date(msg.timestamp.seconds ? msg.timestamp.seconds * 1000 : msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+              {/* Chat Input */}
+              <div className="flex items-center gap-3 px-4 py-4 border-t border-gray-100 bg-white rounded-b-3xl">
+                <input
+                  type="text"
+                  placeholder="Type your message..."
+                  className="flex-1 border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm bg-gray-50"
+                  value={chatInput}
+                  onChange={e => setChatInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleSendMessage(); }}
+                  autoFocus
+                />
+                <button
+                  className="bg-green-600 text-white px-6 py-3 rounded-xl hover:bg-green-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={handleSendMessage}
+                  disabled={!chatInput.trim()}
+                >
+                  Send
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Schedule Modal */}
+        {showScheduleModal && selectedDoctor && (
+          <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-2xl p-6 max-w-lg w-full shadow-xl">
+              <div className="flex justify-between items-center mb-6">
+                <div className="flex items-center space-x-3">
+                  <img
+                    src={selectedDoctor.image}
+                    alt={selectedDoctor.name}
+                    className="w-10 h-10 rounded-full object-cover ring-2 ring-green-50"
+                  />
+                  <div>
+                    <h3 className="text-lg font-medium text-gray-900">
+                      Schedule with {selectedDoctor.name}
+                    </h3>
+                    <p className="text-sm text-gray-500">{selectedDoctor.specialization}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowScheduleModal(false)}
+                  className="text-gray-400 hover:text-gray-500 transition-colors"
+                >
+                  <span className="sr-only">Close</span>
+                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  setScheduleLoading(true);
+                  setScheduleError('');
+                  setScheduleSuccess(false);
+                  try {
+                    const chatData = {
+                      doctorId: selectedDoctor.id,
+                      doctorName: selectedDoctor.displayName || selectedDoctor.name || selectedDoctor.email || 'Unknown Doctor',
+                      patientId: currentUser.uid,
+                      patientName: currentUser.displayName || currentUser.email || 'Unknown Patient',
+                      patientEmail: currentUser.email || '',
+                      patientImage: currentUser.photoURL || '',
+                      date: scheduleDate,
+                      time: scheduleTime,
+                      status: 'Scheduled',
+                      createdAt: new Date().toISOString(),
+                    };
+                    console.log('Scheduling chat with:', chatData);
+                    await scheduleChat(chatData);
+                    setScheduleSuccess(true);
+                    setScheduleDate('');
+                    setScheduleTime('');
+                  } catch (err) {
+                    setScheduleError('Failed to schedule chat. Please try again.');
+                  }
+                  setScheduleLoading(false);
+                }}
+                className="space-y-4"
+              >
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                  <input
+                    type="date"
+                    required
+                    value={scheduleDate}
+                    onChange={e => setScheduleDate(e.target.value)}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Time</label>
+                  <input
+                    type="time"
+                    required
+                    value={scheduleTime}
+                    onChange={e => setScheduleTime(e.target.value)}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+                {scheduleError && <div className="text-red-600 text-sm">{scheduleError}</div>}
+                {scheduleSuccess && <div className="text-green-600 text-sm">Chat scheduled successfully!</div>}
+                <button
+                  type="submit"
+                  className="w-full bg-green-600 text-white py-2 rounded-lg font-medium hover:bg-green-700 transition-colors"
+                  disabled={scheduleLoading}
+                >
+                  {scheduleLoading ? 'Scheduling...' : 'Schedule Session'}
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
-}
+};
 
 export default Dashboard;
