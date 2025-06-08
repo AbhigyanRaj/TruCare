@@ -9,9 +9,13 @@ export const saveUserProfile = async (user, role) => {
     email: user.email || '',
     phoneNumber: user.phoneNumber || '',
     displayName: user.displayName || '',
+    photoURL: user.photoURL || '',
     role: role || 'patient',
     lastLogin: new Date().toISOString(),
     createdAt: new Date().toISOString(),
+    emailVerified: user.emailVerified || false,
+    providerId: user.providerData[0]?.providerId || 'google.com',
+    providerUid: user.providerData[0]?.uid || '',
   };
   await setDoc(userRef, data, { merge: true });
 };

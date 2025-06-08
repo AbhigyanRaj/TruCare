@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
 const Navbar = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const { currentUser, logout } = useAuth();
+  const mobileMenuRef = useRef(null);
 
   const handleLogout = async () => {
     try {
@@ -15,8 +16,20 @@ const Navbar = () => {
     }
   };
 
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target) && menuOpen) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [menuOpen]);
+
   return (
-    <nav className='bg-green-50 shadow-sm'>
+    <nav className='bg-green-50 shadow-sm relative z-50'>
       <div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8'>
         <div className='flex justify-between h-16 items-center'>
           {/* Logo */}
@@ -41,16 +54,16 @@ const Navbar = () => {
               {currentUser ? (
                 <button
                   onClick={handleLogout}
-                  className='inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50'
+                  className='inline-flex items-center px-4 py-2 border border-gray-300 rounded-3xl shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50'
                 >
                   Logout
                 </button>
               ) : (
                 <>
-                  <Link to="/login" className='inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50'>
+                  <Link to="/login" className='inline-flex items-center px-4 py-2 border border-gray-300 rounded-3xl shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50'>
                     Login
                   </Link>
-                  <Link to="/signup" className='inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700'>
+                  <Link to="/signup" className='inline-flex items-center px-4 py-2 border border-transparent rounded-3xl shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700'>
                     Sign Up
                   </Link>
                 </>
@@ -83,56 +96,69 @@ const Navbar = () => {
       </div>
 
       {/* Mobile menu */}
-      {menuOpen && (
-  <div
+      <div
     id="mobile-menu"
-    className="md:hidden bg-white shadow-md px-4 pt-4 pb-6 space-y-3 transition-all duration-300 ease-in-out animate-slideDown"
+    ref={mobileMenuRef}
+    className={`
+      md:hidden
+      fixed inset-x-0 top-16
+      bg-white shadow-lg
+      px-4 pt-4 pb-6 space-y-3
+      transition-all duration-300 ease-in-out
+      h-[calc(100vh-4rem)] overflow-y-auto
+      ${menuOpen ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none'}
+    `}
   >
     <Link
       to="/"
       className="block text-gray-800 px-4 py-2 rounded-lg text-base font-semibold hover:bg-green-100 transition duration-200"
+      onClick={() => setMenuOpen(false)}
     >
       Home
     </Link>
     <Link
       to="/about"
       className="block text-gray-800 px-4 py-2 rounded-lg text-base font-semibold hover:bg-green-100 transition duration-200"
+      onClick={() => setMenuOpen(false)}
     >
       About
     </Link>
     <Link
       to="/services"
       className="block text-gray-800 px-4 py-2 rounded-lg text-base font-semibold hover:bg-green-100 transition duration-200"
+      onClick={() => setMenuOpen(false)}
     >
       Services
     </Link>
     <Link
       to="/contact"
       className="block text-gray-800 px-4 py-2 rounded-lg text-base font-semibold hover:bg-green-100 transition duration-200"
+      onClick={() => setMenuOpen(false)}
     >
       Contact
     </Link>
-    <div className="space-y-2">
+    <div className="space-y-2 flex flex-col">
       {currentUser ? (
-         <button className="w-full text-left px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg font-semibold hover:bg-gray-50 transition duration-200" onClick={handleLogout}>
+         <button className="w-full text-left px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg font-semibold hover:bg-gray-50 transition duration-200 text-sm" onClick={() => { handleLogout(); setMenuOpen(false); }}>
            Logout
          </button>
       ) : (
         <>
-          <Link to="/login" className="w-full text-left px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg font-semibold hover:bg-gray-50 transition duration-200">
+          <Link to="/login" className="w-full text-left px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg font-semibold hover:bg-gray-50 transition duration-200 text-sm" onClick={() => setMenuOpen(false)}>
             Login
           </Link>
-          <Link to="/signup" className="w-full text-left px-4 py-2 bg-green-500 text-white rounded-lg font-semibold hover:bg-green-600 transition duration-200">
+          <Link to="/signup" className="w-full text-left px-4 py-2 bg-green-500 text-white rounded-lg font-semibold hover:bg-green-600 transition duration-200 text-sm" onClick={() => setMenuOpen(false)}>
             Sign Up
           </Link>
         </>
       )}
     </div>
   </div>
-)}
+
 
     </nav>
   );
 };
 
 export default Navbar;
+ 
