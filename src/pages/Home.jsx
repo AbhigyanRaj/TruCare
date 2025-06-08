@@ -17,9 +17,9 @@ const Home = () => {
   return (
     <div className="bg-green-50 min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center relative overflow-hidden">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="text-center">
+        <div className="text-center mb-24">
           {/* Tied & Tested Badge */}
-          <div className="inline-block bg-white rounded-full px-5 py-2.5 mb-8 shadow-lg">
+          <div className="inline-block bg-white rounded-full px-5 py-2.5 mb-12 shadow-lg">
             <div className="flex items-center space-x-2">
               {/* Use actual images */}
               <img src="/person-01.jpg" alt="Person 1" className="w-6 h-6 rounded-full object-cover" />
