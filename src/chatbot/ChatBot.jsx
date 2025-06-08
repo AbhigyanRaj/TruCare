@@ -82,17 +82,21 @@ const ChatBot = () => {
     return RESPONSE_PATTERNS.default.response;
   };
 
-  const handleSendMessage = async (e) => {
-    e.preventDefault();
-    if (inputMessage.trim()) {
+  const handleSendMessage = async (e, messageText = null) => {
+    if (e) {
+      e.preventDefault();
+    }
+    const messageToSend = messageText || inputMessage.trim();
+
+    if (messageToSend) {
       const userMessage = {
-        text: inputMessage.trim(),
+        text: messageToSend,
         sender: 'user',
         timestamp: new Date()
       };
       
       setMessages(prev => [...prev, userMessage]);
-      setInputMessage('');
+      setInputMessage(''); // Clear input after sending
       setIsTyping(true);
 
       // Simulate bot typing delay
@@ -113,6 +117,8 @@ const ChatBot = () => {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
+  const quickReplies = ["How are you feeling today?", "I need help", "I'm feeling sad", "Tell me about anxiety relief"];
+
   return (
     <div ref={chatRef} className="fixed bottom-0 right-0 z-50">
       {/* Floating Bot Button */}
@@ -131,15 +137,15 @@ const ChatBot = () => {
 
       {/* Chat Window */}
       <div 
-        className={`fixed bottom-0 right-0 w-full sm:w-auto transition-all duration-300 p-10 rounded-3xl ${
+        className={`fixed bottom-0 right-0 w-full sm:w-auto transition-all duration-300 p-3 sm:p-10 rounded-2xl ${
           isOpen 
             ? 'opacity-100 translate-y-0' 
             : 'opacity-0 translate-y-full pointer-events-none'
         }`}
       >
-        <div className="flex flex-col h-[55vh] w-[90vw] sm:max-h-[80vh] sm:max-w-[350px] lg:max-w-[500px] bg-white rounded-xl sm:rounded-lg shadow-2xl">
+        <div className="flex flex-col h-[65vh] w-full sm:max-h-[80vh] sm:max-w-[350px] lg:max-w-[500px] bg-white rounded-xl border border-gray-200 shadow-2xl">
           {/* Header */}
-          <div className="p-4 bg-green-600 text-white rounded-t-lg flex justify-between items-center">
+          <div className="p-4 bg-green-600 text-white rounded-t-2xl flex justify-between items-center">
             <div className="flex items-center gap-3">
               <img 
                 src="/Bot.png" 
@@ -161,7 +167,7 @@ const ChatBot = () => {
           </div>
           
           {/* Messages Area */}
-          <div className="flex-1 p-4 overflow-y-auto bg-gray-50">
+          <div className="flex-1 p-3 overflow-y-auto bg-gray-50">
             {messages.map((message, index) => (
               <div
                 key={index}
@@ -170,9 +176,9 @@ const ChatBot = () => {
                 }`}
               >
                 <div
-                  className={`inline-block p-3 rounded-2xl max-w-[80%] ${
+                  className={`inline-block p-3 rounded-2xl max-w-[75%] ${
                     message.sender === 'user'
-                      ? 'bg-green-600 text-white rounded-tr-none'
+                      ? 'bg-green-600 text-white rounded-tr-none border border-green-500'
                       : 'bg-white text-gray-800 rounded-tl-none shadow-sm'
                   }`}
                 >
@@ -200,26 +206,44 @@ const ChatBot = () => {
           </div>
 
           {/* Input Area */}
-          <form onSubmit={handleSendMessage} className="p-4 border-t bg-white">
-            <div className="flex gap-2">
-              <input
-                ref={inputRef}
-                type="text"
-                value={inputMessage}
-                onChange={(e) => setInputMessage(e.target.value)}
-                placeholder="Type your message..."
-                className="flex-1 p-3 border border-gray-200 rounded-full focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
-                aria-label="Message input"
-              />
-              <button
-                type="submit"
-                className="p-3 bg-green-600 text-white rounded-full hover:bg-green-700 focus:outline-none transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={!inputMessage.trim()}
-                aria-label="Send message"
-              >
-                <FiSend size={20} />
-              </button>
-            </div>
+          <form onSubmit={handleSendMessage} className="p-4 border-t bg-white rounded-b-2xl">
+            {window.innerWidth < 768 ? ( // Check for mobile view
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  {quickReplies.map((reply, index) => (
+                    <button
+                      key={index}
+                      type="button"
+                      onClick={() => handleSendMessage(null, reply)}
+                      className="px-3.5 py-2.5 border border-gray-200 rounded-full text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                    >
+                      {reply}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-center text-xs text-gray-500 italic mt-2">Voice to chat (under development)</p>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={inputMessage}
+                  onChange={(e) => setInputMessage(e.target.value)}
+                  placeholder="Type your message..."
+                  className="flex-1 p-3 border border-gray-200 rounded-full focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
+                  aria-label="Message input"
+                />
+                <button
+                  type="submit"
+                  className="p-3 bg-green-600 text-white rounded-full hover:bg-green-700 focus:outline-none transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={!inputMessage.trim()}
+                  aria-label="Send message"
+                >
+                  <FiSend size={20} />
+                </button>
+              </div>
+            )}
           </form>
         </div>
       </div>

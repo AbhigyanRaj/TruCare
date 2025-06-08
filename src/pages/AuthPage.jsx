@@ -34,6 +34,22 @@ function AuthPage() {
     }
   }, [currentUser, navigate]);
 
+  useEffect(() => {
+    const handleScrollOnMobile = () => {
+      if (window.innerWidth < 768) { // Assuming 768px is the breakpoint for mobile
+        window.scrollTo({ top: 80, behavior: 'smooth' }); // Scroll down by 50px
+      }
+    };
+    
+    // Scroll on mount
+    handleScrollOnMobile();
+
+    // Optional: Re-evaluate on window resize if needed, though usually not necessary for initial scroll
+    // window.addEventListener('resize', handleScrollOnMobile);
+    // return () => {
+    //   window.removeEventListener('resize', handleScrollOnMobile);
+    // };
+  }, []); // Empty dependency array means this runs once on mount
 
   useEffect(() => {
     if (method === 'phone' && !recaptchaVerifier) {
@@ -138,7 +154,7 @@ function AuthPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-green-100 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-2xl shadow-xl">
+      <div className="max-w-md w-full space-y-8 bg-white p-4 sm:p-8 rounded-2xl shadow-xl">
         {/* Header */}
         <div className="text-center">
           <h2 className="text-3xl font-bold text-gray-900">
@@ -212,7 +228,7 @@ function AuthPage() {
                   <input
                     type="tel"
                     required
-                    className="block w-full pl-10 pr-3 py-3 border-2 border-gray-200 rounded-xl text-sm placeholder-gray-400 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
+                    className="block w-full pl-4 sm:pl-10 pr-3 py-3 border-2 border-gray-200 rounded-xl text-sm placeholder-gray-400 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
                     placeholder="Phone Number (e.g., +91 934567890)"
                     value={phoneNumber}
                     onChange={(e) => setPhoneNumber(e.target.value)}
