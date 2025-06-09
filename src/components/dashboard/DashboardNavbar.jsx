@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 
@@ -6,6 +6,7 @@ const DashboardNavbar = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const { currentUser, logout } = useAuth();
   const location = useLocation();
+  const mobileMenuRef = useRef(null);
 
   const handleLogout = async () => {
     try {
@@ -15,11 +16,24 @@ const DashboardNavbar = () => {
     }
   };
 
+  // Handle click outside for mobile menu
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target) && menuOpen) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [menuOpen]);
+
   // Only render if user is logged in
   if (!currentUser) return null;
 
   return (
-    <nav className='bg-white shadow-sm'>
+    <nav className='bg-green-50 shadow-sm relative z-50'>
       <div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8'>
         <div className='flex justify-between h-16 items-center'>
           {/* Logo */}
@@ -34,27 +48,27 @@ const DashboardNavbar = () => {
           <div className='hidden md:flex md:items-center md:space-x-6'>
             <Link 
               to='/dashboard' 
-              className={`text-sm font-medium ${location.pathname === '/dashboard' ? 'text-green-600' : 'text-gray-600 hover:text-gray-800'}`}
+              className={`text-gray-600 hover:text-gray-800 text-sm font-medium ${location.pathname === '/dashboard' ? 'text-green-600' : ''}`}
             >
               Home
             </Link>
             <Link 
               to='/dashboard/tests' 
-              className={`text-sm font-medium ${location.pathname === '/dashboard/tests' ? 'text-green-600' : 'text-gray-600 hover:text-gray-800'}`}
+              className={`text-gray-600 hover:text-gray-800 text-sm font-medium ${location.pathname === '/dashboard/tests' ? 'text-green-600' : ''}`}
             >
               Tests
             </Link>
             
             <Link 
               to='/dashboard/contact' 
-              className={`text-sm font-medium ${location.pathname === '/dashboard/contact' ? 'text-green-600' : 'text-gray-600 hover:text-gray-800'}`}
+              className={`text-gray-600 hover:text-gray-800 text-sm font-medium ${location.pathname === '/dashboard/contact' ? 'text-green-600' : ''}`}
             >
               Contact
             </Link>
 
             <Link 
               to='/dashboard/profile' 
-              className={`text-sm font-medium ${location.pathname === '/dashboard/profile' ? 'text-green-600' : 'text-gray-600 hover:text-gray-800'}`}
+              className={`text-gray-600 hover:text-gray-800 text-sm font-medium ${location.pathname === '/dashboard/profile' ? 'text-green-600' : ''}`}
             >
               Profile
             </Link>
@@ -65,7 +79,7 @@ const DashboardNavbar = () => {
             <div className='hidden md:flex md:items-center md:space-x-4'>
               <button
                 onClick={handleLogout}
-                className='inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50'
+                className='inline-flex items-center px-4 py-2 border border-gray-300 rounded-3xl shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50'
               >
                 Logout
               </button>
@@ -97,42 +111,56 @@ const DashboardNavbar = () => {
       </div>
 
       {/* Mobile menu */}
-      {menuOpen && (
-        <div className='md:hidden'>
-          <div className='px-2 pt-2 pb-3 space-y-1 sm:px-3'>
-            <Link
-              to='/dashboard'
-              className={`block px-3 py-2 rounded-md text-base font-medium ${location.pathname === '/dashboard' ? 'text-green-600 bg-green-50' : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'}`}
-            >
-              Home
-            </Link>
-            <Link
-              to='/dashboard/tests'
-              className={`block px-3 py-2 rounded-md text-base font-medium ${location.pathname === '/dashboard/tests' ? 'text-green-600 bg-green-50' : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'}`}
-            >
-              Tests
-            </Link>
-            <Link
-              to='/dashboard/profile'
-              className={`block px-3 py-2 rounded-md text-base font-medium ${location.pathname === '/dashboard/profile' ? 'text-green-600 bg-green-50' : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'}`}
-            >
-              Profile
-            </Link>
-            <Link
-              to='/dashboard/contact'
-              className={`block px-3 py-2 rounded-md text-base font-medium ${location.pathname === '/dashboard/contact' ? 'text-green-600 bg-green-50' : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'}`}
-            >
-              Contact
-            </Link>
-            <button
-              onClick={handleLogout}
-              className='w-full text-left px-3 py-2 rounded-md text-base font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-50'
-            >
-              Logout
-            </button>
-          </div>
-        </div>
-      )}
+      <div
+    id="mobile-menu"
+    ref={mobileMenuRef}
+    className={`
+      md:hidden
+      fixed inset-x-0 top-16
+      bg-white shadow-lg
+      px-4 pt-4 pb-6 space-y-3
+      transition-all duration-300 ease-in-out
+      h-[calc(100vh-4rem)] overflow-y-auto
+      ${menuOpen ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none'}
+    `}
+  >
+    <Link
+      to='/dashboard'
+      className={`block px-4 py-2 rounded-lg text-base font-semibold transition duration-200 ${location.pathname === '/dashboard' ? 'text-green-600 bg-green-100' : 'text-gray-800 hover:bg-green-100'}`}
+      onClick={() => setMenuOpen(false)}
+    >
+      Home
+    </Link>
+    <Link
+      to='/dashboard/tests'
+      className={`block px-4 py-2 rounded-lg text-base font-semibold transition duration-200 ${location.pathname === '/dashboard/tests' ? 'text-green-600 bg-green-100' : 'text-gray-800 hover:bg-green-100'}`}
+      onClick={() => setMenuOpen(false)}
+    >
+      Tests
+    </Link>
+    <Link
+      to='/dashboard/profile'
+      className={`block px-4 py-2 rounded-lg text-base font-semibold transition duration-200 ${location.pathname === '/dashboard/profile' ? 'text-green-600 bg-green-100' : 'text-gray-800 hover:bg-green-100'}`}
+      onClick={() => setMenuOpen(false)}
+    >
+      Profile
+    </Link>
+    <Link
+      to='/dashboard/contact'
+      className={`block px-4 py-2 rounded-lg text-base font-semibold transition duration-200 ${location.pathname === '/dashboard/contact' ? 'text-green-600 bg-green-100' : 'text-gray-800 hover:bg-green-100'}`}
+      onClick={() => setMenuOpen(false)}
+    >
+      Contact
+    </Link>
+    <div className="space-y-2 flex flex-col">
+      <button
+        onClick={() => { handleLogout(); setMenuOpen(false); }}
+        className='w-full text-left px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg font-semibold hover:bg-gray-50 transition duration-200 text-sm'
+      >
+        Logout
+      </button>
+    </div>
+  </div>
     </nav>
   );
 };

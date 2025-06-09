@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { FaComments, FaCalendarAlt, FaStar } from 'react-icons/fa';
 import { getAllDoctors, scheduleChat, createOrGetChat, sendMessageToChat, listenForChatMessages } from '../services/firestore';
@@ -20,6 +20,14 @@ const Dashboard = () => {
   const [chatLoading, setChatLoading] = useState(false);
   const [chatListener, setChatListener] = useState(null);
   const [scheduledChats, setScheduledChats] = useState([]);
+
+  const chatBodyRef = useRef(null);
+
+  useEffect(() => {
+    if (chatBodyRef.current) {
+      chatBodyRef.current.scrollTop = chatBodyRef.current.scrollHeight;
+    }
+  }, [chatMessages]);
 
   useEffect(() => {
     const fetchDoctors = async () => {
@@ -69,32 +77,39 @@ const Dashboard = () => {
           setChatMessages(msgs);
           setChatLoading(false);
         });
-        setChatListener(() => unsub);
+        // Directly return unsub for cleanup
+        return unsub;
       });
-      return () => {
-        if (chatListener) chatListener();
-      };
     }
     // eslint-disable-next-line
   }, [showChatModal, selectedDoctor, currentUser]);
 
   const handleSendMessage = async () => {
     if (!chatInput.trim()) return;
-    setChatLoading(true);
+
+    const messageToSend = chatInput;
+    setChatInput(''); // Clear input immediately
+    setChatLoading(true); // Indicate loading state
+
     const chatId = getChatId();
-    await sendMessageToChat(chatId, {
-      senderId: currentUser.uid,
-      senderRole: 'patient',
-      senderName: currentUser.displayName || currentUser.email || 'Unknown Patient',
-      text: chatInput,
-      timestamp: new Date(),
-    });
-    setChatInput('');
-    setChatLoading(false);
+    try {
+      await sendMessageToChat(chatId, {
+        senderId: currentUser.uid,
+        senderRole: 'patient',
+        senderName: currentUser.displayName || currentUser.email || 'Unknown Patient',
+        senderImage: currentUser.photoURL || '',
+        text: messageToSend,
+        timestamp: new Date(),
+      });
+    } catch (error) {
+      console.error("Error sending message:", error);
+    } finally {
+      setChatLoading(false); // Ensure loading state is reset
+    }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-green-50">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Welcome Section */}
         <div className="mb-12">
@@ -120,7 +135,7 @@ const Dashboard = () => {
               {doctors.map((doctor) => (
                 <div 
                   key={doctor.id} 
-                  className="group bg-white rounded-xl border border-gray-100 hover:border-green-100 transition-all duration-200 overflow-hidden flex flex-col justify-center h-full"
+                  className="group bg-white rounded-3xl border border-gray-100 hover:border-green-100 transition-all duration-200 overflow-hidden flex flex-col justify-center h-full"
                 >
                   <div className="flex flex-col items-center justify-center h-full p-6">
                     <img
@@ -163,7 +178,7 @@ const Dashboard = () => {
         {/* Chat Modal */}
         {showChatModal && selectedDoctor && (
           <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-3xl p-0 max-w-md w-full shadow-2xl flex flex-col h-[580px] overflow-hidden">
+            <div className="bg-white rounded-3xl p-0 max-w-lg w-full shadow-2xl flex flex-col max-h-[90vh] min-h-[400px] overflow-hidden relative">
               {/* Chat Header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-green-600 text-white rounded-t-3xl">
                 <div className="flex items-center space-x-3">
@@ -190,28 +205,42 @@ const Dashboard = () => {
                 </button>
               </div>
               {/* Chat Body */}
-              <div className="flex-1 overflow-y-auto bg-gray-50 px-4 py-6 flex flex-col space-y-4">
+              <div ref={chatBodyRef} className="flex-1 overflow-y-auto bg-gray-50 px-4 py-6 flex flex-col space-y-4 pb-24">
                 {chatLoading ? (
                   <div className="text-center text-gray-400 py-8">Loading messages...</div>
                 ) : chatMessages.length === 0 ? (
                   <div className="text-center text-gray-400 py-8">No messages yet. Start the conversation!</div>
                 ) : (
                   chatMessages.map(msg => (
-                    <div key={msg.id} className={`flex ${msg.senderId === currentUser.uid ? 'justify-end' : 'justify-start'}`}> 
-                      <div className={`max-w-[70%] px-4 py-2 rounded-2xl shadow-sm text-sm break-words ${msg.senderId === currentUser.uid ? 'bg-green-600 text-white rounded-br-none' : 'bg-white text-gray-900 border border-gray-200 rounded-bl-none'}`}>
+                    <div key={msg.id} className={`flex items-end ${msg.senderId === currentUser.uid ? 'justify-end space-x-2' : 'justify-start space-x-2'}`}> 
+                      {msg.senderId !== currentUser.uid && (
+                        <img
+                          src={selectedDoctor.image || 'https://ui-avatars.com/api/?name=Unknown+Doctor&background=E5E7EB&color=374151'}
+                          alt={selectedDoctor.displayName || selectedDoctor.name || selectedDoctor.email || 'Unknown Doctor'}
+                          className="w-8 h-8 rounded-full object-cover shrink-0"
+                        />
+                      )}
+                      <div className={`max-w-[70%] px-4 py-2 rounded-2xl shadow-sm text-sm break-words ${msg.senderId === currentUser.uid ? 'bg-green-600 text-white rounded-br-none' : 'bg-white text-gray-900 border border-gray-200 rounded-bl-none'} transition-opacity duration-200 ease-out`}>
                         <div>{msg.text}</div>
                         <div className={`text-xs mt-1 ${msg.senderId === currentUser.uid ? 'text-green-200 text-right' : 'text-gray-500 text-left'}`}>{msg.timestamp && new Date(msg.timestamp.seconds ? msg.timestamp.seconds * 1000 : msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                       </div>
+                      {msg.senderId === currentUser.uid && (
+                        <img
+                          src={msg.senderImage || currentUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser?.displayName || 'Unknown Patient')}&background=E5E7EB&color=374151`}
+                          alt={currentUser.displayName || currentUser.email || 'Unknown Patient'}
+                          className="w-8 h-8 rounded-full object-cover shrink-0"
+                        />
+                      )}
                     </div>
                   ))
                 )}
               </div>
               {/* Chat Input */}
-              <div className="flex items-center gap-3 px-4 py-4 border-t border-gray-100 bg-white rounded-b-3xl">
+              <div className="absolute bottom-0 w-full flex items-center gap-3 px-4 py-4 border-t border-gray-100 bg-white rounded-b-3xl">
                 <input
                   type="text"
                   placeholder="Type your message..."
-                  className="flex-1 border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm bg-gray-50"
+                  className="flex-1 border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
                   value={chatInput}
                   onChange={e => setChatInput(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') handleSendMessage(); }}
