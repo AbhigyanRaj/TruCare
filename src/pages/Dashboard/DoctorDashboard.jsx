@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { FaComments, FaCalendarAlt, FaEnvelope, FaTimes } from 'react-icons/fa';
-import { getAllPatients, getScheduledChatsForDoctor, createOrGetChat, sendMessageToChat, listenForChatMessages } from '../../services/firestore';
+import { getAllPatients, getScheduledChatsForDoctor, createOrGetChat, sendMessageToChat, listenForChatMessages, listenForChatDocChanges, resetUnreadCount, getChatDocument } from '../../services/firestore';
 
 const DoctorDashboard = () => {
   const { currentUser } = useAuth();
@@ -21,6 +21,22 @@ const DoctorDashboard = () => {
   const [chatInputDirect, setChatInputDirect] = useState('');
   const [chatLoadingDirect, setChatLoadingDirect] = useState(false);
   const [chatListenerDirect, setChatListenerDirect] = useState(null);
+  const [unreadCounts, setUnreadCounts] = useState({});
+
+  const chatBodyRef = useRef(null);
+  const chatBodyRefDirect = useRef(null);
+
+  useEffect(() => {
+    if (chatBodyRef.current) {
+      chatBodyRef.current.scrollTop = chatBodyRef.current.scrollHeight;
+    }
+  }, [chatMessages]);
+
+  useEffect(() => {
+    if (chatBodyRefDirect.current) {
+      chatBodyRefDirect.current.scrollTop = chatBodyRefDirect.current.scrollHeight;
+    }
+  }, [chatMessagesDirect]);
 
   useEffect(() => {
     const fetchPatients = async () => {
@@ -51,6 +67,44 @@ const DoctorDashboard = () => {
     fetchScheduledChats();
   }, [currentUser]);
 
+  // Listen for unread counts for each patient
+  useEffect(() => {
+    if (!currentUser || (!patients.length && !scheduledChats.length)) return;
+
+    const unsubscribes = [];
+
+    // Listen for direct chat unread counts
+    patients.forEach(patient => {
+      const chatId = `${currentUser.uid}_${patient.id}`;
+      const unsub = listenForChatDocChanges(chatId, (chatDoc) => {
+        if (chatDoc) {
+          setUnreadCounts(prevCounts => ({
+            ...prevCounts,
+            [patient.id]: chatDoc.unreadCountDoctor || 0,
+          }));
+        }
+      });
+      unsubscribes.push(unsub);
+    });
+
+    // Listen for scheduled chat unread counts (using chat ID as key)
+    scheduledChats.forEach(chat => {
+      const unsub = listenForChatDocChanges(chat.id, (chatDoc) => {
+        if (chatDoc) {
+          setUnreadCounts(prevCounts => ({
+            ...prevCounts,
+            [chat.id]: chatDoc.unreadCountDoctor || 0,
+          }));
+        }
+      });
+      unsubscribes.push(unsub);
+    });
+
+    return () => {
+      unsubscribes.forEach(unsub => unsub());
+    };
+  }, [patients, scheduledChats, currentUser]);
+
   // Listen for messages when scheduled chat modal opens
   useEffect(() => {
     if (modalOpen && modalType === 'view' && modalData && modalData.id) {
@@ -68,18 +122,20 @@ const DoctorDashboard = () => {
           setChatMessages(msgs);
           setChatLoading(false);
         });
-        setChatListener(() => unsub);
+        // Directly return unsub for cleanup
+        return unsub;
       }).catch(err => {
         console.error('Error creating/getting chat:', err);
         setChatLoading(false);
       });
 
-      return () => {
-        if (chatListener) chatListener();
-      };
+      // Reset unread count when scheduled chat is opened
+      if (currentUser) {
+        resetUnreadCount(chatId, currentUser.uid, 'doctor');
+      }
     }
     // eslint-disable-next-line
-  }, [modalOpen, modalType, modalData]);
+  }, [modalOpen, modalType, modalData, currentUser]);
 
   // Listen for messages when direct chat modal opens
   useEffect(() => {
@@ -93,14 +149,17 @@ const DoctorDashboard = () => {
           setChatMessagesDirect(msgs);
           setChatLoadingDirect(false);
         });
-        setChatListenerDirect(() => unsub);
+        // Directly return unsub for cleanup
+        return unsub;
       }).catch(err => {
         console.error('Error creating/getting direct chat:', err);
         setChatLoadingDirect(false);
       });
-      return () => {
-        if (chatListenerDirect) chatListenerDirect();
-      };
+
+      // Reset unread count when direct chat is opened
+      if (currentUser) {
+        resetUnreadCount(chatId, currentUser.uid, 'doctor');
+      }
     }
     // eslint-disable-next-line
   }, [chatPatient, currentUser]);
@@ -118,35 +177,47 @@ const DoctorDashboard = () => {
 
   const handleSendMessage = async () => {
     if (!chatInput.trim() || !modalData || !modalData.id) return;
+
+    const messageToSend = chatInput;
+    setChatInput(''); // Clear input immediately
     setChatLoading(true);
     try {
       await sendMessageToChat(modalData.id, {
         senderId: currentUser.uid,
         senderRole: 'doctor',
         senderName: currentUser.displayName || currentUser.email || 'Unknown Doctor',
-        text: chatInput,
+        senderImage: currentUser.photoURL || '',
+        text: messageToSend,
         timestamp: new Date(),
       });
-      setChatInput('');
     } catch (err) {
       console.error('Error sending message to scheduled chat:', err);
+    } finally {
+      setChatLoading(false);
     }
-    setChatLoading(false);
   };
 
   const handleSendMessageDirect = async () => {
     if (!chatInputDirect.trim() || !chatPatient) return;
+
+    const messageToSend = chatInputDirect;
+    setChatInputDirect(''); // Clear input immediately
     setChatLoadingDirect(true);
     const chatId = `${currentUser.uid}_${chatPatient.id}`;
-    await sendMessageToChat(chatId, {
-      senderId: currentUser.uid,
-      senderRole: 'doctor',
-      senderName: currentUser.displayName || currentUser.email || 'Unknown Doctor',
-      text: chatInputDirect,
-      timestamp: new Date(),
-    });
-    setChatInputDirect('');
-    setChatLoadingDirect(false);
+    try {
+      await sendMessageToChat(chatId, {
+        senderId: currentUser.uid,
+        senderRole: 'doctor',
+        senderName: currentUser.displayName || currentUser.email || 'Unknown Doctor',
+        senderImage: currentUser.photoURL || '',
+        text: messageToSend,
+        timestamp: new Date(),
+      });
+    } catch (err) {
+      console.error('Error sending message to direct chat:', err);
+    } finally {
+      setChatLoadingDirect(false);
+    }
   };
 
   return (
@@ -165,23 +236,28 @@ const DoctorDashboard = () => {
             ) : (
               <ul className="divide-y divide-gray-100">
                 {patients.map((patient) => (
-                  <li key={patient.id} className="flex items-center bg-gray-50 rounded-lg p-5 mb-4 hover:shadow transition group">
-                    <img src={patient.image || 'https://ui-avatars.com/api/?name=Unknown+Patient&background=E5E7EB&color=374151'} alt={patient.displayName || patient.name || patient.email || 'Unknown Patient'} className="w-12 h-12 rounded-full object-cover mr-4" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <div className="font-medium text-gray-900 text-base">{patient.displayName || patient.name || patient.email || 'Unknown Patient'}</div>
-                        <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-700 font-semibold ml-2">Patient</span>
+                  <li key={patient.id} className="flex flex-col sm:flex-row items-start sm:items-center bg-gray-50 rounded-lg p-4 sm:p-5 mb-4 hover:shadow transition group">
+                    <img src={patient.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(patient.displayName || patient.name || patient.email || 'Unknown Patient')}&background=E5E7EB&color=374151`} alt={patient.displayName || patient.name || patient.email || 'Unknown Patient'} className="w-12 h-12 rounded-full object-cover mr-4 mb-2 sm:mb-0 shrink-0" />
+                    <div className="flex-1 min-w-0 w-full sm:w-auto">
+                      <div className="flex items-center justify-between flex-wrap">
+                        <div className="font-medium text-gray-900 text-base break-words min-w-0 sm:max-w-[calc(100%-60px)]">{patient.displayName || patient.name || patient.email || 'Unknown Patient'}</div>
+                        <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-700 font-semibold ml-auto sm:ml-2 mt-2 sm:mt-0 whitespace-nowrap">Patient</span>
                       </div>
-                      <div className="flex items-center text-xs text-gray-500 mt-1">
+                      <div className="flex items-center text-xs text-gray-500 mt-1 break-words"> 
                         <FaEnvelope className="mr-1" /> {patient.email || 'Unknown' }
                       </div>
                     </div>
-                    <div className="flex flex-col items-end ml-4">
+                    <div className="flex flex-col items-end w-full sm:w-auto ml-0 sm:ml-4 mt-4 sm:mt-0">
                       <button
-                        className="flex items-center bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors shadow-sm"
+                        className="w-full sm:w-auto flex items-center justify-center bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors shadow-sm relative"
                         onClick={() => setChatPatient(patient)}
                       >
                         <FaComments className="mr-2" /> Chat
+                        {unreadCounts[patient.id] > 0 && (
+                          <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
+                            {unreadCounts[patient.id]}
+                          </span>
+                        )}
                       </button>
                     </div>
                   </li>
@@ -200,24 +276,29 @@ const DoctorDashboard = () => {
             ) : (
               <ul className="divide-y divide-gray-100">
                 {scheduledChats.map((chat) => (
-                  <li key={chat.id} className="flex items-center bg-gray-50 rounded-lg p-5 mb-4 hover:shadow transition group">
-                    <img src={chat.patientImage || 'https://ui-avatars.com/api/?name=Unknown+Patient&background=E5E7EB&color=374151'} alt={chat.patientName || 'Unknown Patient'} className="w-12 h-12 rounded-full object-cover mr-4" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <div className="font-medium text-gray-900 text-base">{chat.patientName || 'Unknown Patient'}</div>
-                        <span className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-700 font-semibold ml-2">{chat.status || 'Scheduled'}</span>
+                  <li key={chat.id} className="flex flex-col sm:flex-row items-start sm:items-center bg-gray-50 rounded-lg p-4 sm:p-5 mb-4 hover:shadow transition group">
+                    <img src={chat.patientImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(chat.patientName || chat.patientEmail || 'Unknown Patient')}&background=E5E7EB&color=374151`} alt={chat.patientName || 'Unknown Patient'} className="w-12 h-12 rounded-full object-cover mr-4 mb-2 sm:mb-0 shrink-0" />
+                    <div className="flex-1 min-w-0 w-full sm:w-auto">
+                      <div className="flex items-center justify-between flex-wrap">
+                        <div className="font-medium text-gray-900 text-base break-words min-w-0 sm:max-w-[calc(100%-60px)]">{chat.patientName || 'Unknown Patient'}</div>
+                        <span className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-700 font-semibold ml-auto sm:ml-2 mt-2 sm:mt-0 whitespace-nowrap">{chat.status || 'Scheduled'}</span>
                       </div>
-                      <div className="flex items-center text-xs text-gray-500 mt-1">
+                      <div className="flex items-center text-xs text-gray-500 mt-1 break-words">
                         <FaEnvelope className="mr-1" /> {chat.patientEmail || 'Unknown'}
                       </div>
-                      <div className="text-xs text-gray-400 mt-1">{chat.date} at {chat.time}</div>
+                      <div className="text-xs text-gray-400 mt-1 break-words">{chat.date} at {chat.time}</div>
                     </div>
-                    <div className="flex flex-col items-end ml-4">
+                    <div className="flex flex-col items-end w-full sm:w-auto ml-0 sm:ml-4 mt-4 sm:mt-0">
                       <button
-                        className="flex items-center bg-green-50 text-green-700 border border-green-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-100 transition-colors shadow-sm"
+                        className="w-full sm:w-auto flex items-center justify-center bg-green-50 text-green-700 border border-green-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-100 transition-colors shadow-sm relative"
                         onClick={() => openModal('view', chat)}
                       >
                         <FaCalendarAlt className="mr-2" /> View
+                        {unreadCounts[chat.id] > 0 && (
+                          <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
+                            {unreadCounts[chat.id]}
+                          </span>
+                        )}
                       </button>
                     </div>
                   </li>
@@ -230,10 +311,10 @@ const DoctorDashboard = () => {
 
       {/* Modal for Chat/View */}
       {modalOpen && modalData && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-3xl p-0 max-w-md w-full shadow-2xl flex flex-col h-[580px] overflow-hidden">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-0 z-50 sm:p-4">
+          <div className="bg-white rounded-none w-full h-full shadow-2xl flex flex-col relative sm:rounded-3xl sm:max-w-lg sm:max-h-[90vh] sm:min-h-[400px] overflow-hidden">
             {/* Chat Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-green-600 text-white rounded-t-3xl">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-green-600 text-white">
               <div className="flex items-center space-x-3">
                 <img
                   src={modalData.patientImage || 'https://ui-avatars.com/api/?name=Unknown+Patient&background=E5E7EB&color=374151'}
@@ -257,27 +338,41 @@ const DoctorDashboard = () => {
             </div>
             {modalType === 'view' ? (
               <>
-                <div className="flex-1 overflow-y-auto bg-gray-50 px-4 py-6 flex flex-col space-y-4">
+                <div className="flex-1 overflow-y-auto bg-gray-50 px-4 py-6 flex flex-col space-y-4 pb-24">
                   {chatLoading ? (
                     <div className="text-center text-gray-400 py-8">Loading messages...</div>
                   ) : chatMessages.length === 0 ? (
                     <div className="text-center text-gray-400 py-8">No messages yet. Start the conversation!</div>
                   ) : (
                     chatMessages.map(msg => (
-                      <div key={msg.id} className={`flex ${msg.senderId === currentUser.uid ? 'justify-end' : 'justify-start'}`}> 
-                        <div className={`max-w-[70%] px-4 py-2 rounded-2xl shadow-sm text-sm break-words ${msg.senderId === currentUser.uid ? 'bg-green-600 text-white rounded-br-none' : 'bg-white text-gray-900 border border-gray-200 rounded-bl-none'}`}>
+                      <div key={msg.id} className={`flex items-end ${msg.senderId === currentUser.uid ? 'justify-end space-x-2' : 'justify-start space-x-2'}`}> 
+                        {msg.senderId !== currentUser.uid && (
+                          <img
+                            src={modalData.patientImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(modalData.patientName || modalData.patientEmail || 'Unknown Patient')}&background=E5E7EB&color=374151`}
+                            alt={modalData.patientName || 'Unknown Patient'}
+                            className="w-8 h-8 rounded-full object-cover shrink-0"
+                          />
+                        )}
+                        <div className={`max-w-[70%] px-4 py-2 rounded-2xl shadow-sm text-sm break-words ${msg.senderId === currentUser.uid ? 'bg-green-600 text-white rounded-br-none' : 'bg-white text-gray-900 border border-gray-200 rounded-bl-none'} transition-opacity duration-200 ease-out`}>
                           <div>{msg.text}</div>
                           <div className={`text-xs mt-1 ${msg.senderId === currentUser.uid ? 'text-green-200 text-right' : 'text-gray-500 text-left'}`}>{msg.timestamp && new Date(msg.timestamp.seconds ? msg.timestamp.seconds * 1000 : msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                         </div>
+                        {msg.senderId === currentUser.uid && (
+                          <img
+                            src={msg.senderImage || currentUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser?.displayName || currentUser?.email || 'Unknown Doctor')}&background=E5E7EB&color=374151`}
+                            alt={currentUser.displayName || currentUser.email || 'Unknown Doctor'}
+                            className="w-8 h-8 rounded-full object-cover shrink-0"
+                          />
+                        )}
                       </div>
                     ))
                   )}
                 </div>
-                <div className="flex items-center gap-3 px-4 py-4 border-t border-gray-100 bg-white rounded-b-3xl">
+                <div className="absolute bottom-0 w-full flex items-center gap-3 px-4 py-4 border-t border-gray-100 bg-white">
                   <input
                     type="text"
                     placeholder="Type your message..."
-                    className="flex-1 border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm bg-gray-50"
+                    className="flex-1 border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
                     value={chatInput}
                     onChange={e => setChatInput(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') handleSendMessage(); }}
@@ -299,10 +394,10 @@ const DoctorDashboard = () => {
 
       {/* Direct Chat Modal */}
       {chatPatient && currentUser && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-3xl p-0 max-w-md w-full shadow-2xl flex flex-col h-[580px] overflow-hidden">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-0 z-50 sm:p-4">
+          <div className="bg-white rounded-none w-full h-full shadow-2xl flex flex-col relative sm:rounded-3xl sm:max-w-lg sm:max-h-[90vh] sm:min-h-[400px] overflow-hidden">
             {/* Chat Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-green-600 text-white rounded-t-3xl">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-green-600 text-white">
               <div className="flex items-center space-x-3">
                 <img
                   src={chatPatient.image || 'https://ui-avatars.com/api/?name=Unknown+Patient&background=E5E7EB&color=374151'}
@@ -327,28 +422,41 @@ const DoctorDashboard = () => {
               </button>
             </div>
             {/* Chat Body */}
-            <div className="flex-1 overflow-y-auto bg-gray-50 px-4 py-6 flex flex-col space-y-4">
+            <div className="flex-1 overflow-y-auto bg-gray-50 px-4 py-6 flex flex-col space-y-4 pb-24">
               {chatLoadingDirect ? (
                 <div className="text-center text-gray-400 py-8">Loading messages...</div>
               ) : chatMessagesDirect.length === 0 ? (
                 <div className="text-center text-gray-400 py-8">No messages yet. Start the conversation!</div>
               ) : (
                 chatMessagesDirect.map(msg => (
-                  <div key={msg.id} className={`flex ${msg.senderId === currentUser.uid ? 'justify-end' : 'justify-start'}`}> 
-                    <div className={`max-w-[70%] px-4 py-2 rounded-2xl shadow-sm text-sm break-words ${msg.senderId === currentUser.uid ? 'bg-green-600 text-white rounded-br-none' : 'bg-white text-gray-900 border border-gray-200 rounded-bl-none'}`}>
+                  <div key={msg.id} className={`flex items-end ${msg.senderId === currentUser.uid ? 'justify-end space-x-2' : 'justify-start space-x-2'}`}> 
+                    {msg.senderId !== currentUser.uid && (
+                      <img
+                        src={chatPatient.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(chatPatient.displayName || chatPatient.name || chatPatient.email || 'Unknown Patient')}&background=E5E7EB&color=374151`}
+                        alt={chatPatient.displayName || chatPatient.name || chatPatient.email || 'Unknown Patient'}
+                        className="w-8 h-8 rounded-full object-cover shrink-0"
+                      />
+                    )}
+                    <div className={`max-w-[70%] px-4 py-2 rounded-2xl shadow-sm text-sm break-words ${msg.senderId === currentUser.uid ? 'bg-green-600 text-white rounded-br-none' : 'bg-white text-gray-900 border border-gray-200 rounded-bl-none'} transition-opacity duration-200 ease-out`}>
                       <div>{msg.text}</div>
                       <div className={`text-xs mt-1 ${msg.senderId === currentUser.uid ? 'text-green-200 text-right' : 'text-gray-500 text-left'}`}>{msg.timestamp && new Date(msg.timestamp.seconds ? msg.timestamp.seconds * 1000 : msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                     </div>
+                    {msg.senderId === currentUser.uid && (
+                      <img
+                        src={msg.senderImage || currentUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser?.displayName || currentUser?.email || 'Unknown Doctor')}&background=E5E7EB&color=374151`}
+                        alt={currentUser.displayName || currentUser.email || 'Unknown Doctor'}
+                        className="w-8 h-8 rounded-full object-cover shrink-0"
+                      />
+                    )}
                   </div>
                 ))
               )}
             </div>
-            {/* Chat Input */}
-            <div className="flex items-center gap-3 px-4 py-4 border-t border-gray-100 bg-white rounded-b-3xl">
+            <div className="absolute bottom-0 w-full flex items-center gap-3 px-4 py-4 border-t border-gray-100 bg-white">
               <input
                 type="text"
                 placeholder="Type your message..."
-                className="flex-1 border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm bg-gray-50"
+                className="flex-1 border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
                 value={chatInputDirect}
                 onChange={e => setChatInputDirect(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') handleSendMessageDirect(); }}

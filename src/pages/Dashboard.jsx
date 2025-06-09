@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { FaComments, FaCalendarAlt, FaStar } from 'react-icons/fa';
-import { getAllDoctors, scheduleChat, createOrGetChat, sendMessageToChat, listenForChatMessages } from '../services/firestore';
+import { getAllDoctors, scheduleChat, createOrGetChat, sendMessageToChat, listenForChatMessages, listenForChatDocChanges, resetUnreadCount, getChatDocument } from '../services/firestore';
 
 const Dashboard = () => {
   const { currentUser } = useAuth();
@@ -20,6 +20,7 @@ const Dashboard = () => {
   const [chatLoading, setChatLoading] = useState(false);
   const [chatListener, setChatListener] = useState(null);
   const [scheduledChats, setScheduledChats] = useState([]);
+  const [unreadCounts, setUnreadCounts] = useState({});
 
   const chatBodyRef = useRef(null);
 
@@ -43,9 +44,38 @@ const Dashboard = () => {
     fetchDoctors();
   }, []);
 
+  // Listen for unread counts for each doctor
+  useEffect(() => {
+    if (!currentUser || !doctors.length) return;
+
+    const unsubscribes = [];
+
+    doctors.forEach(doctor => {
+      const chatId = `${doctor.id}_${currentUser.uid}`;
+      const unsub = listenForChatDocChanges(chatId, (chatDoc) => {
+        if (chatDoc) {
+          setUnreadCounts(prevCounts => ({
+            ...prevCounts,
+            [doctor.id]: chatDoc.unreadCountPatient || 0,
+          }));
+        }
+      });
+      unsubscribes.push(unsub);
+    });
+
+    return () => {
+      unsubscribes.forEach(unsub => unsub());
+    };
+  }, [doctors, currentUser]);
+
   const handleStartChat = (doctor) => {
     setSelectedDoctor(doctor);
     setShowChatModal(true);
+    // Reset unread count when chat is opened
+    if (currentUser) {
+      const chatId = `${doctor.id}_${currentUser.uid}`;
+      resetUnreadCount(chatId, currentUser.uid, 'patient');
+    }
   };
 
   const handleScheduleChat = (doctor) => {
@@ -155,10 +185,15 @@ const Dashboard = () => {
                     <div className="flex space-x-3 w-full mt-auto">
                       <button
                         onClick={() => handleStartChat(doctor)}
-                        className="flex-1 flex items-center justify-center space-x-2 bg-green-600 text-white px-4 py-2.5 rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+                        className="flex-1 flex items-center justify-center space-x-2 bg-green-600 text-white px-4 py-2.5 rounded-lg hover:bg-green-700 transition-colors text-sm font-medium relative"
                       >
                         <FaComments className="text-sm" />
                         <span>Chat Now</span>
+                        {unreadCounts[doctor.id] > 0 && (
+                          <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
+                            {unreadCounts[doctor.id]}
+                          </span>
+                        )}
                       </button>
                       <button
                         onClick={() => handleScheduleChat(doctor)}
@@ -177,10 +212,10 @@ const Dashboard = () => {
 
         {/* Chat Modal */}
         {showChatModal && selectedDoctor && (
-          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-3xl p-0 max-w-lg w-full shadow-2xl flex flex-col max-h-[90vh] min-h-[400px] overflow-hidden relative">
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-0 z-50 sm:p-4">
+            <div className="bg-white w-full h-full shadow-2xl flex flex-col relative sm:rounded-3xl sm:max-w-lg sm:max-h-[90vh] sm:min-h-[400px] overflow-hidden">
               {/* Chat Header */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-green-600 text-white rounded-t-3xl">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-green-600 text-white">
                 <div className="flex items-center space-x-3">
                   <img
                     src={selectedDoctor.image || 'https://ui-avatars.com/api/?name=Unknown+Doctor&background=E5E7EB&color=374151'}

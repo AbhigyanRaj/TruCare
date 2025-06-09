@@ -1,6 +1,6 @@
 import { db } from '../config/firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { collection, query, where, getDocs, addDoc, onSnapshot, orderBy } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, onSnapshot, orderBy, increment } from 'firebase/firestore';
 
 export const saveUserProfile = async (user, role) => {
   if (!user) return;
@@ -68,6 +68,8 @@ export const createOrGetChat = async (chatId, participants) => {
       createdAt: new Date().toISOString(),
       lastMessage: '',
       lastTimestamp: null,
+      unreadCountPatient: 0,
+      unreadCountDoctor: 0,
     });
   }
   return chatRef;
@@ -78,10 +80,20 @@ export const sendMessageToChat = async (chatId, messageData) => {
   const messagesRef = collection(chatRef, 'messages');
   await addDoc(messagesRef, messageData);
   // Optionally update lastMessage/lastTimestamp
+  // Determine which unread count to increment
+  const incrementField = messageData.senderRole === 'patient' ? 'unreadCountDoctor' : 'unreadCountPatient';
+
   await setDoc(chatRef, {
     lastMessage: messageData.text,
     lastTimestamp: messageData.timestamp,
+    [incrementField]: increment(1), // Increment the unread count
   }, { merge: true });
+};
+
+export const getChatDocument = async (chatId) => {
+  const chatRef = doc(db, 'chats', chatId);
+  const chatSnap = await getDoc(chatRef);
+  return chatSnap.exists() ? { id: chatSnap.id, ...chatSnap.data() } : null;
 };
 
 export const listenForChatMessages = (chatId, callback) => {
@@ -91,4 +103,28 @@ export const listenForChatMessages = (chatId, callback) => {
     const messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     callback(messages);
   });
+};
+
+export const listenForChatDocChanges = (chatId, callback) => {
+  const chatRef = doc(db, 'chats', chatId);
+  return onSnapshot(chatRef, (docSnap) => {
+    if (docSnap.exists()) {
+      callback(docSnap.data());
+    } else {
+      callback(null);
+    }
+  });
+};
+
+export const resetUnreadCount = async (chatId, userId, userRole) => {
+  const chatRef = doc(db, 'chats', chatId);
+  let updateData = {};
+  if (userRole === 'patient') {
+    updateData.unreadCountPatient = 0;
+  } else if (userRole === 'doctor') {
+    updateData.unreadCountDoctor = 0;
+  }
+  if (Object.keys(updateData).length > 0) {
+    await setDoc(chatRef, updateData, { merge: true });
+  }
 };
