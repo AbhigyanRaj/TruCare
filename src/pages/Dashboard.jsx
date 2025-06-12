@@ -169,7 +169,7 @@ const Dashboard = () => {
                 >
                   <div className="flex flex-col items-center justify-center h-full p-6">
                     <img
-                      src={doctor.image || 'https://ui-avatars.com/api/?name=Unknown+Doctor&background=E5E7EB&color=374151'}
+                      src={doctor.photoURL || doctor.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(doctor.displayName || doctor.name || doctor.email || 'Unknown Doctor')}&background=E5E7EB&color=374151`}
                       alt={doctor.displayName || doctor.email || 'Unknown Doctor'}
                       className="w-16 h-16 rounded-full object-cover ring-2 ring-green-50 mb-4"
                     />
@@ -218,7 +218,7 @@ const Dashboard = () => {
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-green-600 text-white">
                 <div className="flex items-center space-x-3">
                   <img
-                    src={selectedDoctor.image || 'https://ui-avatars.com/api/?name=Unknown+Doctor&background=E5E7EB&color=374151'}
+                    src={selectedDoctor.photoURL || selectedDoctor.image || 'https://ui-avatars.com/api/?name=Unknown+Doctor&background=E5E7EB&color=374151'}
                     alt={selectedDoctor.displayName || selectedDoctor.name || selectedDoctor.email || 'Unknown Doctor'}
                     className="w-12 h-12 rounded-full object-cover ring-2 ring-white ring-opacity-50"
                   />
@@ -250,7 +250,7 @@ const Dashboard = () => {
                     <div key={msg.id} className={`flex items-end ${msg.senderId === currentUser.uid ? 'justify-end space-x-2' : 'justify-start space-x-2'}`}> 
                       {msg.senderId !== currentUser.uid && (
                         <img
-                          src={selectedDoctor.image || 'https://ui-avatars.com/api/?name=Unknown+Doctor&background=E5E7EB&color=374151'}
+                          src={selectedDoctor.photoURL || selectedDoctor.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedDoctor.displayName || selectedDoctor.name || selectedDoctor.email || 'Unknown Doctor')}&background=E5E7EB&color=374151`}
                           alt={selectedDoctor.displayName || selectedDoctor.name || selectedDoctor.email || 'Unknown Doctor'}
                           className="w-8 h-8 rounded-full object-cover shrink-0"
                         />
@@ -300,7 +300,7 @@ const Dashboard = () => {
               <div className="flex justify-between items-center mb-6">
                 <div className="flex items-center space-x-3">
                   <img
-                    src={selectedDoctor.image}
+                    src={selectedDoctor.photoURL || selectedDoctor.image || 'https://ui-avatars.com/api/?name=Unknown+Doctor&background=E5E7EB&color=374151'}
                     alt={selectedDoctor.name}
                     className="w-10 h-10 rounded-full object-cover ring-2 ring-green-50"
                   />
