@@ -237,7 +237,7 @@ const DoctorDashboard = () => {
               <ul className="divide-y divide-gray-100">
                 {patients.map((patient) => (
                   <li key={patient.id} className="flex flex-col sm:flex-row items-start sm:items-center bg-gray-50 rounded-lg p-4 sm:p-5 mb-4 hover:shadow transition group">
-                    <img src={patient.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(patient.displayName || patient.name || patient.email || 'Unknown Patient')}&background=E5E7EB&color=374151`} alt={patient.displayName || patient.name || patient.email || 'Unknown Patient'} className="w-12 h-12 rounded-full object-cover mr-4 mb-2 sm:mb-0 shrink-0" />
+                    <img src={patient.photoURL || patient.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(patient.displayName || patient.name || patient.email || 'Unknown Patient')}&background=E5E7EB&color=374151`} alt={patient.displayName || patient.name || patient.email || 'Unknown Patient'} className="w-12 h-12 rounded-full object-cover mr-4 mb-2 sm:mb-0 shrink-0" />
                     <div className="flex-1 min-w-0 w-full sm:w-auto">
                       <div className="flex items-center justify-between flex-wrap">
                         <div className="font-medium text-gray-900 text-base break-words min-w-0 sm:max-w-[calc(100%-60px)]">{patient.displayName || patient.name || patient.email || 'Unknown Patient'}</div>
@@ -277,7 +277,7 @@ const DoctorDashboard = () => {
               <ul className="divide-y divide-gray-100">
                 {scheduledChats.map((chat) => (
                   <li key={chat.id} className="flex flex-col sm:flex-row items-start sm:items-center bg-gray-50 rounded-lg p-4 sm:p-5 mb-4 hover:shadow transition group">
-                    <img src={chat.patientImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(chat.patientName || chat.patientEmail || 'Unknown Patient')}&background=E5E7EB&color=374151`} alt={chat.patientName || 'Unknown Patient'} className="w-12 h-12 rounded-full object-cover mr-4 mb-2 sm:mb-0 shrink-0" />
+                    <img src={chat.patientPhotoURL || chat.patientImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(chat.patientName || chat.patientEmail || 'Unknown Patient')}&background=E5E7EB&color=374151`} alt={chat.patientName || 'Unknown Patient'} className="w-12 h-12 rounded-full object-cover mr-4 mb-2 sm:mb-0 shrink-0" />
                     <div className="flex-1 min-w-0 w-full sm:w-auto">
                       <div className="flex items-center justify-between flex-wrap">
                         <div className="font-medium text-gray-900 text-base break-words min-w-0 sm:max-w-[calc(100%-60px)]">{chat.patientName || 'Unknown Patient'}</div>
@@ -317,7 +317,7 @@ const DoctorDashboard = () => {
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-green-600 text-white">
               <div className="flex items-center space-x-3">
                 <img
-                  src={modalData.patientImage || 'https://ui-avatars.com/api/?name=Unknown+Patient&background=E5E7EB&color=374151'}
+                  src={modalData.patientPhotoURL || modalData.patientImage || 'https://ui-avatars.com/api/?name=Unknown+Patient&background=E5E7EB&color=374151'}
                   alt={modalData.patientName || 'Unknown Patient'}
                   className="w-12 h-12 rounded-full object-cover ring-2 ring-white ring-opacity-50"
                 />
@@ -348,7 +348,7 @@ const DoctorDashboard = () => {
                       <div key={msg.id} className={`flex items-end ${msg.senderId === currentUser.uid ? 'justify-end space-x-2' : 'justify-start space-x-2'}`}> 
                         {msg.senderId !== currentUser.uid && (
                           <img
-                            src={modalData.patientImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(modalData.patientName || modalData.patientEmail || 'Unknown Patient')}&background=E5E7EB&color=374151`}
+                            src={modalData.patientPhotoURL || modalData.patientImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(modalData.patientName || modalData.patientEmail || 'Unknown Patient')}&background=E5E7EB&color=374151`}
                             alt={modalData.patientName || 'Unknown Patient'}
                             className="w-8 h-8 rounded-full object-cover shrink-0"
                           />
@@ -400,7 +400,7 @@ const DoctorDashboard = () => {
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-green-600 text-white">
               <div className="flex items-center space-x-3">
                 <img
-                  src={chatPatient.image || 'https://ui-avatars.com/api/?name=Unknown+Patient&background=E5E7EB&color=374151'}
+                  src={chatPatient.photoURL || chatPatient.image || 'https://ui-avatars.com/api/?name=Unknown+Patient&background=E5E7EB&color=374151'}
                   alt={chatPatient.displayName || chatPatient.name || chatPatient.email || 'Unknown Patient'}
                   className="w-12 h-12 rounded-full object-cover ring-2 ring-white ring-opacity-50"
                 />
@@ -432,7 +432,7 @@ const DoctorDashboard = () => {
                   <div key={msg.id} className={`flex items-end ${msg.senderId === currentUser.uid ? 'justify-end space-x-2' : 'justify-start space-x-2'}`}> 
                     {msg.senderId !== currentUser.uid && (
                       <img
-                        src={chatPatient.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(chatPatient.displayName || chatPatient.name || chatPatient.email || 'Unknown Patient')}&background=E5E7EB&color=374151`}
+                        src={chatPatient.photoURL || chatPatient.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(chatPatient.displayName || chatPatient.name || chatPatient.email || 'Unknown Patient')}&background=E5E7EB&color=374151`}
                         alt={chatPatient.displayName || chatPatient.name || chatPatient.email || 'Unknown Patient'}
                         className="w-8 h-8 rounded-full object-cover shrink-0"
                       />
