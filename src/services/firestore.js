@@ -1,5 +1,5 @@
 import { db } from '../config/firebase';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { collection, query, where, getDocs, addDoc, onSnapshot, orderBy, increment } from 'firebase/firestore';
 
 export const saveUserProfile = async (user, role) => {
@@ -126,5 +126,35 @@ export const resetUnreadCount = async (chatId, userId, userRole) => {
   }
   if (Object.keys(updateData).length > 0) {
     await setDoc(chatRef, updateData, { merge: true });
+  }
+};
+
+export const saveChatReport = async (reportData) => {
+  try {
+    const reportRef = await addDoc(collection(db, 'chat_reports'), {
+      ...reportData,
+      createdAt: new Date(),
+    });
+    console.log("Report saved with ID: ", reportRef.id);
+    return reportRef.id;
+  } catch (error) {
+    console.error("Error saving chat report: ", error);
+    throw error;
+  }
+};
+
+export const getChatReportsForPatient = async (patientId) => {
+  try {
+    const reportsQuery = query(
+      collection(db, 'chat_reports'),
+      where('patientId', '==', patientId),
+      orderBy('createdAt', 'desc')
+    );
+    const querySnapshot = await getDocs(reportsQuery);
+    const reports = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return reports;
+  } catch (error) {
+    console.error("Error fetching chat reports: ", error);
+    throw error;
   }
 };

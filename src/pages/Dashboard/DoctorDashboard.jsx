@@ -1,7 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { FaComments, FaCalendarAlt, FaEnvelope, FaTimes } from 'react-icons/fa';
-import { getAllPatients, getScheduledChatsForDoctor, createOrGetChat, sendMessageToChat, listenForChatMessages, listenForChatDocChanges, resetUnreadCount, getChatDocument } from '../../services/firestore';
+import { FaComments, FaCalendarAlt, FaEnvelope, FaTimes, FaHistory, FaArrowLeft } from 'react-icons/fa';
+import { 
+  getAllPatients, 
+  getScheduledChatsForDoctor, 
+  createOrGetChat, 
+  sendMessageToChat, 
+  listenForChatMessages, 
+  listenForChatDocChanges, 
+  resetUnreadCount, 
+  saveChatReport,
+  getChatReportsForPatient 
+} from '../../services/firestore';
 
 const DoctorDashboard = () => {
   const { currentUser } = useAuth();
@@ -22,9 +32,77 @@ const DoctorDashboard = () => {
   const [chatLoadingDirect, setChatLoadingDirect] = useState(false);
   const [chatListenerDirect, setChatListenerDirect] = useState(null);
   const [unreadCounts, setUnreadCounts] = useState({});
+  const [timeLeft, setTimeLeft] = useState(null);
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [chatReport, setChatReport] = useState(null);
 
+  const [viewingPatientHistory, setViewingPatientHistory] = useState(null);
+  const [patientHistory, setPatientHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  const timerRef = useRef(null);
   const chatBodyRef = useRef(null);
   const chatBodyRefDirect = useRef(null);
+
+  const handleSaveAndEndChat = async (chatType, messages, patientInfo) => {
+    closeChatModals(true); 
+
+    if (!messages || messages.length === 0) return;
+
+    const reportData = {
+      doctorId: currentUser.uid,
+      patientId: patientInfo.patientId,
+      patientName: patientInfo.patientName,
+      patientPhotoURL: patientInfo.patientPhotoURL,
+      messages: messages.map(m => ({ ...m, timestamp: m.timestamp || new Date() })),
+    };
+
+    try {
+      await saveChatReport(reportData);
+    } catch (error) {
+      console.error("Failed to save the report:", error);
+    }
+
+    if (chatType === 'scheduled') {
+      setChatMessages([]);
+    } else {
+      setChatMessagesDirect([]);
+    }
+
+    setChatReport(reportData);
+    setReportModalOpen(true);
+  };
+
+  const closeChatModals = (isSaving = false) => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    setTimeLeft(null);
+    setModalOpen(false);
+    setModalData(null);
+    setModalType('');
+    setChatPatient(null);
+    
+    if (!isSaving) {
+      setChatMessages([]);
+      setChatMessagesDirect([]);
+    }
+  };
+
+  const handleViewHistory = (patient) => {
+    setViewingPatientHistory(patient);
+    setHistoryLoading(true);
+    getChatReportsForPatient(patient.id)
+      .then(setPatientHistory)
+      .catch(err => {
+        console.error("Failed to fetch history:", err);
+        setPatientHistory([]);
+      })
+      .finally(() => setHistoryLoading(false));
+  };
+
+  const handleBackToDashboard = () => {
+    setViewingPatientHistory(null);
+    setPatientHistory([]);
+  };
 
   useEffect(() => {
     if (chatBodyRef.current) {
@@ -122,8 +200,7 @@ const DoctorDashboard = () => {
           setChatMessages(msgs);
           setChatLoading(false);
         });
-        // Directly return unsub for cleanup
-        return unsub;
+        setChatListener(() => unsub); // Save the unsubscribe function
       }).catch(err => {
         console.error('Error creating/getting chat:', err);
         setChatLoading(false);
@@ -132,6 +209,41 @@ const DoctorDashboard = () => {
       // Reset unread count when scheduled chat is opened
       if (currentUser) {
         resetUnreadCount(chatId, currentUser.uid, 'doctor');
+      }
+
+      // Start timer
+      setTimeLeft(45 * 60);
+      if (timerRef.current) clearInterval(timerRef.current);
+      timerRef.current = setInterval(() => {
+        setTimeLeft(prev => {
+          if (prev !== null && prev <= 1) {
+            clearInterval(timerRef.current);
+            closeChatModals(); // Just close the modal, don't save
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+    } else {
+      // Cleanup when modal closes
+      if (chatListener) {
+        chatListener();
+        setChatListener(null);
+      }
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+      setTimeLeft(null);
+    }
+
+    return () => {
+      if (chatListener) {
+        chatListener();
+        setChatListener(null);
+      }
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
       }
     }
     // eslint-disable-next-line
@@ -149,8 +261,7 @@ const DoctorDashboard = () => {
           setChatMessagesDirect(msgs);
           setChatLoadingDirect(false);
         });
-        // Directly return unsub for cleanup
-        return unsub;
+        setChatListenerDirect(() => unsub); // Save the unsubscribe function
       }).catch(err => {
         console.error('Error creating/getting direct chat:', err);
         setChatLoadingDirect(false);
@@ -160,7 +271,41 @@ const DoctorDashboard = () => {
       if (currentUser) {
         resetUnreadCount(chatId, currentUser.uid, 'doctor');
       }
+
+      // Start timer
+      setTimeLeft(45 * 60);
+      if (timerRef.current) clearInterval(timerRef.current);
+      timerRef.current = setInterval(() => {
+        setTimeLeft(prev => {
+          if (prev !== null && prev <= 1) {
+            clearInterval(timerRef.current);
+            closeChatModals(); // Just close the modal, don't save
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else {
+      // Cleanup when modal closes
+      if (chatListenerDirect) {
+        chatListenerDirect();
+        setChatListenerDirect(null);
+      }
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+      setTimeLeft(null);
     }
+    
+    return () => {
+      if (chatListenerDirect) {
+        chatListenerDirect();
+        setChatListenerDirect(null);
+      }
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
     // eslint-disable-next-line
   }, [chatPatient, currentUser]);
 
@@ -170,9 +315,10 @@ const DoctorDashboard = () => {
     setModalOpen(true);
   };
   const closeModal = () => {
-    setModalOpen(false);
-    setModalData(null);
-    setModalType('');
+    handleSaveAndEndChat('scheduled', chatMessages, {
+      patientName: modalData?.patientName,
+      patientPhotoURL: modalData?.patientPhotoURL
+    });
   };
 
   const handleSendMessage = async () => {
@@ -220,6 +366,92 @@ const DoctorDashboard = () => {
     }
   };
 
+  const formatTimestamp = (timestamp) => {
+    if (!timestamp) return 'N/A';
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    return date.toLocaleString();
+  };
+
+  if (viewingPatientHistory) {
+    return (
+      <div className="min-h-screen bg-gray-50 py-8">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="bg-white rounded-2xl shadow-sm p-8">
+            {/* History Header */}
+            <div className="flex items-center justify-between mb-8 border-b pb-4">
+                <div className="flex items-center space-x-4">
+                    <button onClick={handleBackToDashboard} className="text-gray-600 hover:text-gray-900">
+                        <FaArrowLeft className="h-6 w-6" />
+                    </button>
+                    <img
+                        src={viewingPatientHistory.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(viewingPatientHistory.displayName || 'P')}&background=E5E7EB&color=374151`}
+                        alt={viewingPatientHistory.displayName || 'Patient'}
+                        className="w-12 h-12 rounded-full object-cover"
+                    />
+                    <div>
+                        <h3 className="text-xl font-semibold text-gray-800">{viewingPatientHistory.displayName || 'Unknown Patient'}</h3>
+                        <p className="text-sm text-gray-500">Chat History</p>
+                    </div>
+                </div>
+            </div>
+
+            {/* History Body */}
+            {historyLoading ? (
+              <div className="text-center text-gray-500 py-10">Loading history...</div>
+            ) : patientHistory.length === 0 ? (
+              <div className="text-center text-gray-500 py-10">No chat history found for this patient.</div>
+            ) : (
+              <ul className="space-y-4">
+                {patientHistory.map(report => (
+                  <li key={report.id} className="bg-gray-50 p-4 rounded-lg border border-gray-200 hover:shadow-md transition cursor-pointer" onClick={() => { setChatReport(report); setReportModalOpen(true); }}>
+                    <div className="flex justify-between items-center">
+                      <p className="font-semibold text-gray-800">Chat Session</p>
+                      <p className="text-sm text-gray-500">{formatTimestamp(report.createdAt)}</p>
+                    </div>
+                    <p className="text-sm text-gray-600 mt-2">{report.messages.length} messages</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+        {/* Re-using the report modal to show history details */}
+        {reportModalOpen && chatReport && (
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-0 z-50 sm:p-4">
+            <div className="bg-white rounded-none w-full h-full shadow-2xl flex flex-col relative sm:rounded-3xl sm:max-w-2xl sm:max-h-[90vh] sm:min-h-[400px] overflow-hidden">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50">
+                  <h3 className="text-xl font-semibold text-gray-800">Chat Transcript - {formatTimestamp(chatReport.createdAt)}</h3>
+                  <button onClick={() => setReportModalOpen(false)} className="text-gray-500 hover:text-gray-800 transition-colors">
+                      <FaTimes/>
+                  </button>
+              </div>
+              <div className="flex-1 overflow-y-auto bg-white p-6 space-y-4">
+                <div className="prose prose-sm max-w-none">
+                  {chatReport.messages.map(msg => (
+                    <div key={msg.id || msg.timestamp.seconds} className="mb-2">
+                      <p className="font-bold">
+                        {msg.senderName || (msg.senderRole === 'doctor' ? 'Doctor' : 'Patient')}
+                        <span className="text-xs font-normal text-gray-500 ml-2">
+                          {formatTimestamp(msg.timestamp)}
+                        </span>
+                      </p>
+                      <p>{msg.text}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end">
+                  <button onClick={() => setReportModalOpen(false)} className="bg-gray-200 text-gray-800 px-6 py-2 rounded-lg hover:bg-gray-300 transition-colors text-sm font-medium">
+                      Close
+                  </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -247,7 +479,7 @@ const DoctorDashboard = () => {
                         <FaEnvelope className="mr-1" /> {patient.email || 'Unknown' }
                       </div>
                     </div>
-                    <div className="flex flex-col items-end w-full sm:w-auto ml-0 sm:ml-4 mt-4 sm:mt-0">
+                    <div className="flex flex-col items-end w-full sm:w-auto ml-0 sm:ml-4 mt-4 sm:mt-0 space-y-2">
                       <button
                         className="w-full sm:w-auto flex items-center justify-center bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors shadow-sm relative"
                         onClick={() => setChatPatient(patient)}
@@ -258,6 +490,12 @@ const DoctorDashboard = () => {
                             {unreadCounts[patient.id]}
                           </span>
                         )}
+                      </button>
+                      <button
+                        className="w-full sm:w-auto flex items-center justify-center bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-600 transition-colors shadow-sm"
+                        onClick={() => handleViewHistory(patient)}
+                      >
+                        <FaHistory className="mr-2" /> History
                       </button>
                     </div>
                   </li>
@@ -326,9 +564,14 @@ const DoctorDashboard = () => {
                   <p className="text-sm text-green-100">Patient</p>
                 </div>
               </div>
+              {timeLeft !== null && (
+                <div className="text-white font-semibold text-lg bg-white/20 px-3 py-1 rounded-lg">
+                  {`${String(Math.floor(timeLeft / 60)).padStart(2, '0')}:${String(timeLeft % 60).padStart(2, '0')}`}
+                </div>
+              )}
               <button
                 className="text-white hover:text-green-100 transition-colors"
-                onClick={closeModal}
+                onClick={closeChatModals}
               >
                 <span className="sr-only">Close</span>
                 <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -368,23 +611,34 @@ const DoctorDashboard = () => {
                     ))
                   )}
                 </div>
-                <div className="absolute bottom-0 w-full flex items-center gap-3 px-4 py-4 border-t border-gray-100 bg-white">
-                  <input
-                    type="text"
-                    placeholder="Type your message..."
-                    className="flex-1 border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
-                    value={chatInput}
-                    onChange={e => setChatInput(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') handleSendMessage(); }}
-                    autoFocus
-                  />
-                  <button
-                    className="bg-green-600 text-white px-6 py-3 rounded-xl hover:bg-green-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                    onClick={handleSendMessage}
-                    disabled={!chatInput.trim()}
-                  >
-                    Send
-                  </button>
+                {/* Footer with Input and Actions */}
+                <div className="mt-auto border-t border-gray-100 bg-white">
+                    <div className="p-4 flex items-center gap-3">
+                        <input
+                            type="text"
+                            placeholder="Type your message..."
+                            className="flex-1 border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
+                            value={chatInput}
+                            onChange={e => setChatInput(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter' && chatInput.trim()) handleSendMessage(); }}
+                            autoFocus
+                        />
+                        <button 
+                            onClick={handleSendMessage} 
+                            className="bg-green-600 text-white px-6 py-3 rounded-xl hover:bg-green-700 transition-colors text-sm font-medium disabled:opacity-50" 
+                            disabled={!chatInput.trim()}>
+                            Send
+                        </button>
+                    </div>
+                    <div className="px-6 py-3 bg-gray-50 flex justify-end items-center border-t">
+                        <button
+                            onClick={() => handleSaveAndEndChat('scheduled', chatMessages, { patientId: modalData?.patientId, patientName: modalData?.patientName, patientPhotoURL: modalData?.patientPhotoURL })}
+                            className="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 transition-colors text-sm font-medium w-full disabled:opacity-50"
+                            disabled={chatMessages.length === 0}
+                        >
+                            Save & End Session
+                        </button>
+                    </div>
                 </div>
               </>
             ) : null}
@@ -411,8 +665,13 @@ const DoctorDashboard = () => {
                   <p className="text-sm text-green-100">Patient</p>
                 </div>
               </div>
+              {timeLeft !== null && (
+                <div className="text-white font-semibold text-lg bg-white/20 px-3 py-1 rounded-lg">
+                  {`${String(Math.floor(timeLeft / 60)).padStart(2, '0')}:${String(timeLeft % 60).padStart(2, '0')}`}
+                </div>
+              )}
               <button
-                onClick={() => setChatPatient(null)}
+                onClick={closeChatModals}
                 className="text-white hover:text-green-100 transition-colors"
               >
                 <span className="sr-only">Close</span>
@@ -452,23 +711,93 @@ const DoctorDashboard = () => {
                 ))
               )}
             </div>
-            <div className="absolute bottom-0 w-full flex items-center gap-3 px-4 py-4 border-t border-gray-100 bg-white">
-              <input
-                type="text"
-                placeholder="Type your message..."
-                className="flex-1 border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
-                value={chatInputDirect}
-                onChange={e => setChatInputDirect(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') handleSendMessageDirect(); }}
-                autoFocus
-              />
-              <button
-                className="bg-green-600 text-white px-6 py-3 rounded-xl hover:bg-green-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                onClick={handleSendMessageDirect}
-                disabled={!chatInputDirect.trim()}
-              >
-                Send
-              </button>
+            {/* Footer with Input and Actions */}
+            <div className="mt-auto border-t border-gray-100 bg-white">
+                <div className="p-4 flex items-center gap-3">
+                    <input
+                        type="text"
+                        placeholder="Type your message..."
+                        className="flex-1 border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
+                        value={chatInputDirect}
+                        onChange={e => setChatInputDirect(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter' && chatInputDirect.trim()) handleSendMessageDirect(); }}
+                        autoFocus
+                    />
+                    <button 
+                        onClick={handleSendMessageDirect} 
+                        className="bg-green-600 text-white px-6 py-3 rounded-xl hover:bg-green-700 transition-colors text-sm font-medium disabled:opacity-50" 
+                        disabled={!chatInputDirect.trim()}>
+                        Send
+                    </button>
+                </div>
+                <div className="px-6 py-3 bg-gray-50 flex justify-end items-center border-t">
+                    <button
+                        onClick={() => handleSaveAndEndChat('direct', chatMessagesDirect, { patientId: chatPatient?.id, patientName: chatPatient?.displayName || chatPatient?.name, patientPhotoURL: chatPatient?.photoURL })}
+                        className="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 transition-colors text-sm font-medium w-full disabled:opacity-50"
+                        disabled={chatMessagesDirect.length === 0}
+                    >
+                        Save & End Session
+                    </button>
+                </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Chat Report Modal */}
+      {reportModalOpen && chatReport && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-0 z-[100] sm:p-4">
+          <div className="bg-white rounded-none w-full h-full shadow-2xl flex flex-col relative sm:rounded-3xl sm:max-w-2xl sm:max-h-[90vh] sm:min-h-[400px] overflow-hidden">
+            {/* Report Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50">
+                <h3 className="text-xl font-semibold text-gray-800">Chat Report</h3>
+                <button
+                    onClick={() => setReportModalOpen(false)}
+                    className="text-gray-500 hover:text-gray-800 transition-colors"
+                >
+                    <span className="sr-only">Close</span>
+                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+            </div>
+
+            {/* Report Body */}
+            <div className="flex-1 overflow-y-auto bg-white p-6 space-y-4">
+              <div className="flex items-center space-x-4 pb-4 border-b border-gray-200">
+                <img
+                    src={chatReport.patientPhotoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(chatReport.patientName || 'P')}&background=E5E7EB&color=374151`}
+                    alt={chatReport.patientName || 'Patient'}
+                    className="w-16 h-16 rounded-full object-cover"
+                />
+                <div>
+                    <h4 className="text-lg font-bold text-gray-900">{chatReport.patientName}</h4>
+                    <p className="text-sm text-gray-500">Chat Session Summary</p>
+                </div>
+              </div>
+
+              <h5 className="text-md font-semibold text-gray-700 pt-4">Conversation Transcript:</h5>
+              <div className="prose prose-sm max-w-none border border-gray-200 rounded-lg p-4 bg-gray-50 max-h-96 overflow-y-auto">
+                {chatReport.messages.map(msg => (
+                  <div key={msg.id} className="mb-2">
+                    <p className="font-bold">
+                      {msg.senderRole === 'doctor' ? (currentUser.displayName || 'Doctor') : (chatReport.patientName || 'Patient')}
+                      <span className="text-xs font-normal text-gray-500 ml-2">
+                        {new Date(msg.timestamp?.seconds * 1000 || msg.timestamp).toLocaleString()}
+                      </span>
+                    </p>
+                    <p>{msg.text}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Report Footer */}
+            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end">
+                <button
+                    onClick={() => setReportModalOpen(false)}
+                    className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+                >
+                    Close
+                </button>
             </div>
           </div>
         </div>
