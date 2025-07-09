@@ -24,8 +24,7 @@ export const isEmailRoleConflict = async (email, role) => {
   // Query for any user with this email
   const q = query(collection(db, 'userProfiles'), where('email', '==', email));
   const querySnapshot = await getDocs(q);
-  if (querySnapshot.empty) return false; // No user with this email
-  // If any user with this email has a different role, return true
+  if (querySnapshot.empty) return false;
   for (const docSnap of querySnapshot.docs) {
     const data = docSnap.data();
     if (data.role && data.role !== role) {
@@ -143,6 +142,23 @@ export const saveChatReport = async (reportData) => {
   }
 };
 
+// Save mental health test results for a user
+export const saveMentalHealthTest = async (userId, answers, extraData = {}) => {
+  try {
+    const testRef = await addDoc(collection(db, 'mental_health_tests'), {
+      userId,
+      answers,
+      ...extraData,
+      createdAt: new Date(),
+    });
+    console.log("Mental health test saved with ID: ", testRef.id);
+    return testRef.id;
+  } catch (error) {
+    console.error("Error saving mental health test: ", error);
+    throw error;
+  }
+};
+
 export const getChatReportsForPatient = async (patientId) => {
   try {
     const reportsQuery = query(
@@ -155,6 +171,44 @@ export const getChatReportsForPatient = async (patientId) => {
     return reports;
   } catch (error) {
     console.error("Error fetching chat reports: ", error);
+    throw error;
+  }
+};
+
+// Update user's test status (e.g., hasCompletedTest)
+export const updateUserTestStatus = async (userId, hasCompletedTest) => {
+  if (!userId) return;
+  const userRef = doc(db, 'userProfiles', userId);
+  await setDoc(userRef, { hasCompletedTest }, { merge: true });
+};
+
+// Save a full mental health test attempt (answers, results, date, user info) in a new collection
+export const saveMentalHealthTestResult = async (userId, testData) => {
+  try {
+    const testRef = await addDoc(collection(db, 'mental_health_test_results'), {
+      userId,
+      ...testData,
+      createdAt: new Date(),
+    });
+    return testRef.id;
+  } catch (error) {
+    console.error("Error saving mental health test result: ", error);
+    throw error;
+  }
+};
+
+// Fetch all mental health test results for a user, ordered by date descending
+export const getMentalHealthTestResultsForUser = async (userId) => {
+  try {
+    const resultsQuery = query(
+      collection(db, 'mental_health_test_results'),
+      where('userId', '==', userId),
+      orderBy('createdAt', 'desc')
+    );
+    const querySnapshot = await getDocs(resultsQuery);
+    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  } catch (error) {
+    console.error("Error fetching mental health test results: ", error);
     throw error;
   }
 };

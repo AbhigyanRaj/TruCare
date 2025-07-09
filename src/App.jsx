@@ -8,8 +8,8 @@ import Home from './pages/Home';
 import AuthPage from './pages/AuthPage';
 import Dashboard from './pages/Dashboard.jsx';
 import DoctorDashboard from './pages/Dashboard/DoctorDashboard.jsx';
-import TestPage from './pages/Dashboard/TestPage.jsx';
 import ChatPage from './pages/Dashboard/ChatPage.jsx';
+import MentalHealthTest from './pages/Dashboard/MentalHealthTest.jsx';
 
 // Basic placeholder components to avoid errors for now
 const Login = () => <div>Login Page</div>;
@@ -69,7 +69,7 @@ function App() {
               path="/dashboard/tests"
               element={
                 <ProtectedRoute>
-                  <TestPage />
+                  <MentalHealthTest />
                 </ProtectedRoute>
               }
             />

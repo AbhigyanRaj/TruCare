@@ -25,6 +25,8 @@ const RESPONSE_PATTERNS = {
   }
 };
 
+const API_KEY = import.meta.env.VITE_AI_API_KEY || import.meta.env.REACT_APP_AI_API_KEY;
+
 const ChatBot = () => {
   const [messages, setMessages] = useState([
     { 
@@ -39,6 +41,7 @@ const ChatBot = () => {
   const chatRef = useRef(null);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const [loading, setLoading] = useState(false);
 
   // Auto-scroll to bottom when new messages arrive
   const scrollToBottom = () => {
@@ -98,18 +101,36 @@ const ChatBot = () => {
       setMessages(prev => [...prev, userMessage]);
       setInputMessage(''); // Clear input after sending
       setIsTyping(true);
+      setLoading(true);
 
-      // Simulate bot typing delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const botResponse = getBotResponse(userMessage.text);
-      setMessages(prev => [...prev, {
-        text: botResponse,
-        sender: 'bot',
-        timestamp: new Date()
-      }]);
-      
-      setIsTyping(false);
+      try {
+        // Example: Using Google PaLM API (replace with your actual endpoint if different)
+        const response = await fetch("https://generativelanguage.googleapis.com/v1beta2/models/chat-bison-001:generateMessage?key=" + API_KEY, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            prompt: { messages: [{ content: messageToSend }] },
+          }),
+        });
+        const data = await response.json();
+        const aiText = data?.candidates?.[0]?.content || "Sorry, I couldn't get a response.";
+        setMessages(prev => [...prev, {
+          text: aiText,
+          sender: 'bot',
+          timestamp: new Date()
+        }]);
+      } catch (error) {
+        setMessages(prev => [...prev, {
+          text: "Error: " + error.message,
+          sender: 'bot',
+          timestamp: new Date()
+        }]);
+      } finally {
+        setIsTyping(false);
+        setLoading(false);
+      }
     }
   };
 
@@ -202,6 +223,17 @@ const ChatBot = () => {
                 </div>
               </div>
             )}
+            {loading && (
+              <div className="text-left mb-4">
+                <div className="inline-block p-3 rounded-2xl bg-white text-gray-800 rounded-tl-none shadow-sm">
+                  <div className="flex space-x-2">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-100" />
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-200" />
+                  </div>
+                </div>
+              </div>
+            )}
             <div ref={messagesEndRef} />
           </div>
 
@@ -214,7 +246,7 @@ const ChatBot = () => {
                     <button
                       key={index}
                       type="button"
-                      onClick={() => handleSendMessage(null, reply)}
+                      onClick={(e) => handleSendMessage(e, reply)}
                       className="px-3.5 py-2.5 border border-gray-200 rounded-full text-sm text-gray-700 hover:bg-gray-100 transition-colors"
                     >
                       {reply}
@@ -237,7 +269,7 @@ const ChatBot = () => {
                 <button
                   type="submit"
                   className="p-3 bg-green-600 text-white rounded-full hover:bg-green-700 focus:outline-none transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={!inputMessage.trim()}
+                  disabled={!inputMessage.trim() || loading}
                   aria-label="Send message"
                 >
                   <FiSend size={20} />
