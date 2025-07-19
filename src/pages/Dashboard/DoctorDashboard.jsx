@@ -12,6 +12,8 @@ import {
   saveChatReport,
   getChatReportsForPatient 
 } from '../../services/firestore';
+import SessionNotes from '../../components/dashboard/SessionNotes.jsx';
+import VideoCallModal from '../../components/dashboard/VideoCallModal.jsx';
 
 const DoctorDashboard = () => {
   const { currentUser } = useAuth();
@@ -35,6 +37,7 @@ const DoctorDashboard = () => {
   const [timeLeft, setTimeLeft] = useState(null);
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [chatReport, setChatReport] = useState(null);
+  const [videoCallOpen, setVideoCallOpen] = useState(false);
 
   const [viewingPatientHistory, setViewingPatientHistory] = useState(null);
   const [patientHistory, setPatientHistory] = useState([]);
@@ -611,6 +614,15 @@ const DoctorDashboard = () => {
                     ))
                   )}
                 </div>
+                {/* Session Notes below chat history */}
+                <div className="px-4 pb-6">
+                  <SessionNotes
+                    doctorId={currentUser?.uid}
+                    patientId={modalData?.patientId}
+                    sessionId={modalData?.id}
+                    sessionDate={modalData?.date}
+                  />
+                </div>
                 {/* Footer with Input and Actions */}
                 <div className="mt-auto border-t border-gray-100 bg-white">
                     <div className="p-4 flex items-center gap-3">
@@ -640,6 +652,20 @@ const DoctorDashboard = () => {
                         </button>
                     </div>
                 </div>
+                <div className="flex justify-center mt-4">
+                  <button
+                    className="bg-primary-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-primary-700 transition shadow"
+                    onClick={() => setVideoCallOpen(true)}
+                  >
+                    Start Video Call
+                  </button>
+                </div>
+                <VideoCallModal
+                  open={videoCallOpen}
+                  onClose={() => setVideoCallOpen(false)}
+                  patientName={modalData?.patientName}
+                  doctorName={currentUser?.displayName}
+                />
               </>
             ) : null}
           </div>

@@ -1,6 +1,7 @@
 import React from 'react';
 // Assuming you might need Link later for specific test pages
 // import { Link } from 'react-router-dom';
+import AssessmentProgress from '../../components/dashboard/AssessmentProgress.jsx';
 
 function TestPage() {
   return (
@@ -33,6 +34,9 @@ function TestPage() {
              <p>Complete a test to see your results.</p>
            </div>
         </div>
+
+        {/* Self-Assessment Progress Section */}
+        <AssessmentProgress />
 
         {/* Meditation/Focus Option Section */}
         <div className="bg-white shadow-lg rounded-lg p-6">

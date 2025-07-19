@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { FaComments, FaCalendarAlt, FaStar } from 'react-icons/fa';
+import { FaComments, FaCalendarAlt, FaStar, FaVideo } from 'react-icons/fa';
+import { BsInfoCircle } from 'react-icons/bs';
 import { getAllDoctors, scheduleChat, createOrGetChat, sendMessageToChat, listenForChatMessages, listenForChatDocChanges, resetUnreadCount, getChatDocument } from '../services/firestore';
+import MoodTracker from '../components/dashboard/MoodTracker.jsx';
+import VideoCallModal from '../components/dashboard/VideoCallModal.jsx';
 
 const Dashboard = () => {
   const { currentUser } = useAuth();
@@ -21,6 +24,8 @@ const Dashboard = () => {
   const [chatListener, setChatListener] = useState(null);
   const [scheduledChats, setScheduledChats] = useState([]);
   const [unreadCounts, setUnreadCounts] = useState({});
+  const [videoCallOpen, setVideoCallOpen] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
 
   const chatBodyRef = useRef(null);
 
@@ -138,71 +143,122 @@ const Dashboard = () => {
     }
   };
 
+  // Add a helper to add a system message to chatMessages
+  const addSystemMessage = async (text) => {
+    const chatId = getChatId();
+    const systemMsg = {
+      text,
+      senderId: 'system',
+      senderRole: 'system',
+      senderName: 'System',
+      senderImage: '',
+      timestamp: new Date(),
+      system: true,
+    };
+    setChatMessages((prev) => [
+      ...prev,
+      { ...systemMsg, id: `system-${Date.now()}` },
+    ]);
+    try {
+      await sendMessageToChat(chatId, systemMsg);
+    } catch (e) {
+      // Optionally handle error
+    }
+  };
+
+  useEffect(() => {
+    if (showChatModal) {
+      document.body.classList.add('overflow-hidden');
+    } else {
+      document.body.classList.remove('overflow-hidden');
+    }
+    return () => document.body.classList.remove('overflow-hidden');
+  }, [showChatModal]);
+
+  // Helper to format time
+  const formatTime = (date) => {
+    if (!date) return '';
+    const d = date.seconds ? new Date(date.seconds * 1000) : new Date(date);
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  // Group messages by sender for iMessage style
+  const groupedMessages = [];
+  let lastSender = null;
+  let group = [];
+  chatMessages.forEach((msg, idx) => {
+    if (msg.system) {
+      if (group.length) groupedMessages.push(group);
+      groupedMessages.push([msg]);
+      group = [];
+      lastSender = null;
+    } else if (msg.senderId === lastSender) {
+      group.push(msg);
+    } else {
+      if (group.length) groupedMessages.push(group);
+      group = [msg];
+      lastSender = msg.senderId;
+    }
+    if (idx === chatMessages.length - 1 && group.length) groupedMessages.push(group);
+  });
+
   return (
-    <div className="min-h-screen bg-green-50">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-green-100 pb-24">
+      {/* Apple-style floating navbar is already present */}
+      <div className="max-w-5xl mx-auto px-4 sm:px-8 pt-32">
         {/* Welcome Section */}
-        <div className="mb-12">
-          <h1 className="text-3xl font-light text-gray-900">
-            Welcome back, <span className="font-medium">{currentUser?.displayName || 'Patient'}</span>
+        <div className="mb-20 text-center">
+          <h1 className="text-4xl font-semibold text-gray-900 mb-3 tracking-tight" style={{ fontFamily: 'SF Pro Display, Inter, sans-serif' }}>
+            Welcome back, <span className="text-primary-600 font-bold">{currentUser?.displayName || 'Patient'}</span>
           </h1>
-          <p className="mt-2 text-gray-500">
-            Connect with our mental health professionals
+          <p className="mt-2 text-base text-gray-500 font-light max-w-xl mx-auto">
+            Your personalized mental health journey starts here. Connect with our professionals, track your progress, and take control of your well-being.
           </p>
         </div>
 
-        {/* Available Doctors Section */}
-        <div className="space-y-8">
-          <h2 className="text-xl font-light text-gray-900">
-            Available Doctors
+        {/* Doctors Section */}
+        <div className="mb-20">
+          <h2 className="text-lg font-semibold text-gray-800 mb-8 text-left" style={{ fontFamily: 'SF Pro Display, Inter, sans-serif' }}>
+            Your Care Team
           </h2>
           {loading ? (
-            <div className="text-center text-gray-500 py-12">Loading doctors...</div>
+            <div className="text-center text-gray-400 py-12">Loading doctors...</div>
           ) : doctors.length === 0 ? (
-            <div className="text-center text-gray-500 py-12">No doctors are available at the moment.</div>
+            <div className="text-center text-gray-400 py-12">No doctors are available at the moment.</div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {doctors.map((doctor) => (
-                <div 
-                  key={doctor.id} 
-                  className="group bg-white rounded-3xl border border-gray-100 hover:border-green-100 transition-all duration-200 overflow-hidden flex flex-col justify-center h-full"
+                <div
+                  key={doctor.id}
+                  className="bg-white rounded-xl shadow-md p-6 flex flex-col items-center border border-gray-100 hover:shadow-lg transition-all duration-200"
+                  style={{ minWidth: 260, maxWidth: 320 }}
                 >
-                  <div className="flex flex-col items-center justify-center h-full p-6">
-                    <img
-                      src={doctor.photoURL || doctor.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(doctor.displayName || doctor.name || doctor.email || 'Unknown Doctor')}&background=E5E7EB&color=374151`}
-                      alt={doctor.displayName || doctor.email || 'Unknown Doctor'}
-                      className="w-16 h-16 rounded-full object-cover ring-2 ring-green-50 mb-4"
-                    />
-                    <h3 className="text-lg font-medium text-gray-900 text-center">{doctor.displayName || doctor.name || doctor.email || 'Unknown Doctor'}</h3>
-                    <p className="text-sm text-gray-500 text-center mb-2">{doctor.specialization || 'Unknown'}</p>
-                    <div className="flex items-center text-sm text-gray-500 justify-center mb-1">
-                      <FaStar className="text-yellow-400 mr-1" />
-                      <span>{doctor.rating !== undefined && doctor.rating !== null ? doctor.rating : '—'}</span>
-                      <span className="mx-2">•</span>
-                      <span>{doctor.experience || '—'}</span>
-                    </div>
-                    <p className="text-sm text-gray-500 text-center mb-4">{doctor.availability || 'Availability: Unknown'}</p>
-                    <div className="flex space-x-3 w-full mt-auto">
-                      <button
-                        onClick={() => handleStartChat(doctor)}
-                        className="flex-1 flex items-center justify-center space-x-2 bg-green-600 text-white px-4 py-2.5 rounded-lg hover:bg-green-700 transition-colors text-sm font-medium relative"
-                      >
-                        <FaComments className="text-sm" />
-                        <span>Chat Now</span>
-                        {unreadCounts[doctor.id] > 0 && (
-                          <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
-                            {unreadCounts[doctor.id]}
-                          </span>
-                        )}
-                      </button>
-                      <button
-                        onClick={() => handleScheduleChat(doctor)}
-                        className="flex-1 flex items-center justify-center space-x-2 bg-white text-green-600 border border-green-200 px-4 py-2.5 rounded-lg hover:bg-green-50 transition-colors text-sm font-medium"
-                      >
-                        <FaCalendarAlt className="text-sm" />
-                        <span>Schedule</span>
-                      </button>
-                    </div>
+                  <img
+                    src={doctor.photoURL || doctor.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(doctor.displayName || doctor.name || doctor.email || 'Unknown Doctor')}&background=E5E7EB&color=374151`}
+                    alt={doctor.displayName || doctor.email || 'Unknown Doctor'}
+                    className="w-14 h-14 rounded-full object-cover border-2 border-primary-100 mb-3 shadow-sm"
+                  />
+                  <h3 className="text-base font-semibold text-gray-900 text-center mb-1" style={{ fontFamily: 'SF Pro Display, Inter, sans-serif' }}>{doctor.displayName || doctor.name || doctor.email || 'Unknown Doctor'}</h3>
+                  <p className="text-xs text-primary-600 text-center mb-2 font-medium">{doctor.specialization || 'Specialist'}</p>
+                  <div className="flex items-center text-xs text-gray-500 justify-center mb-1 gap-2">
+                    <span className="bg-primary-100 text-primary-700 px-2 py-0.5 rounded-full font-semibold">{doctor.rating !== undefined && doctor.rating !== null ? doctor.rating : '—'} ★</span>
+                    <span className="mx-2">•</span>
+                    <span>{doctor.experience || '—'} yrs</span>
+                  </div>
+                  <p className="text-xs text-gray-400 text-center mb-4">{doctor.availability || 'Availability: Unknown'}</p>
+                  <div className="flex gap-3 w-full mt-auto">
+                    <button
+                      onClick={() => handleStartChat(doctor)}
+                      className="flex-1 bg-primary-100 text-primary-700 py-2 rounded-full font-semibold text-sm shadow-sm hover:bg-primary-200 transition-all"
+                    >
+                      Chat Now
+                    </button>
+                    <button
+                      onClick={() => handleScheduleChat(doctor)}
+                      className="flex-1 bg-secondary-100 text-secondary-700 py-2 rounded-full font-semibold text-sm shadow-sm hover:bg-secondary-200 transition-all"
+                    >
+                      Schedule
+                    </button>
                   </div>
                 </div>
               ))}
@@ -210,87 +266,134 @@ const Dashboard = () => {
           )}
         </div>
 
-        {/* Chat Modal */}
+        {/* Mood Tracker Section */}
+        <div className="mb-20">
+          <MoodTracker />
+        </div>
+
+        {/* Chat Modal and Schedule Modal remain unchanged, but benefit from new background and spacing */}
         {showChatModal && selectedDoctor && (
-          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-0 z-50 sm:p-4">
-            <div className="bg-white w-full h-full shadow-2xl flex flex-col relative sm:rounded-3xl sm:max-w-lg sm:max-h-[90vh] sm:min-h-[400px] overflow-hidden">
-              {/* Chat Header */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-green-600 text-white">
-                <div className="flex items-center space-x-3">
-                  <img
-                    src={selectedDoctor.photoURL || selectedDoctor.image || 'https://ui-avatars.com/api/?name=Unknown+Doctor&background=E5E7EB&color=374151'}
-                    alt={selectedDoctor.displayName || selectedDoctor.name || selectedDoctor.email || 'Unknown Doctor'}
-                    className="w-12 h-12 rounded-full object-cover ring-2 ring-white ring-opacity-50"
-                  />
-                  <div>
-                    <h3 className="text-xl font-semibold">
-                      {selectedDoctor.displayName || selectedDoctor.name || selectedDoctor.email || 'Unknown Doctor'}
-                    </h3>
-                    <p className="text-sm text-green-100">{selectedDoctor.specialization || 'Doctor'}</p>
+          <>
+            <div className="fixed inset-0 bg-dark-900/60 backdrop-blur-sm flex items-center justify-center p-0 z-50 sm:p-4 animate-fadeIn">
+              <div className="bg-primary-50 w-full h-full shadow-2xl flex flex-col relative sm:rounded-3xl sm:max-w-lg sm:max-h-[90vh] sm:min-h-[400px] overflow-hidden border border-primary-100 animate-slideUp">
+                {/* Chat Header */}
+                <div className="flex items-center justify-between px-6 py-4 border-b border-primary-200 bg-primary-600 text-white rounded-t-3xl">
+                  <div className="flex items-center space-x-3">
+                    <img
+                      src={selectedDoctor.photoURL || selectedDoctor.image || 'https://ui-avatars.com/api/?name=Unknown+Doctor&background=E5E7EB&color=374151'}
+                      alt={selectedDoctor.displayName || selectedDoctor.name || selectedDoctor.email || 'Unknown Doctor'}
+                      className="w-12 h-12 rounded-full object-cover ring-2 ring-white ring-opacity-50"
+                    />
+                    <div>
+                      <h3 className="text-xl font-semibold">
+                        {selectedDoctor.displayName || selectedDoctor.name || selectedDoctor.email || 'Unknown Doctor'}
+                      </h3>
+                      <p className="text-sm text-primary-100">{selectedDoctor.specialization || 'Doctor'}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setVideoCallOpen(true)}
+                      className="bg-primary-100 hover:bg-primary-200 text-primary-700 p-2 rounded-full transition shadow flex items-center justify-center"
+                      title="Start Video Call"
+                    >
+                      <FaVideo className="w-5 h-5" />
+                    </button>
+                    <button
+                      onClick={() => setShowChatModal(false)}
+                      className="text-white hover:text-primary-200 transition-colors text-2xl font-bold ml-2"
+                      title="Close"
+                    >
+                      &times;
+                    </button>
                   </div>
                 </div>
-                <button
-                  onClick={() => setShowChatModal(false)}
-                  className="text-white hover:text-green-100 transition-colors"
-                >
-                  <span className="sr-only">Close</span>
-                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              {/* Chat Body */}
-              <div ref={chatBodyRef} className="flex-1 overflow-y-auto bg-gray-50 px-4 py-6 flex flex-col space-y-4 pb-24">
-                {chatLoading ? (
-                  <div className="text-center text-gray-400 py-8">Loading messages...</div>
-                ) : chatMessages.length === 0 ? (
-                  <div className="text-center text-gray-400 py-8">No messages yet. Start the conversation!</div>
-                ) : (
-                  chatMessages.map(msg => (
-                    <div key={msg.id} className={`flex items-end ${msg.senderId === currentUser.uid ? 'justify-end space-x-2' : 'justify-start space-x-2'}`}> 
-                      {msg.senderId !== currentUser.uid && (
-                        <img
-                          src={selectedDoctor.photoURL || selectedDoctor.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedDoctor.displayName || selectedDoctor.name || selectedDoctor.email || 'Unknown Doctor')}&background=E5E7EB&color=374151`}
-                          alt={selectedDoctor.displayName || selectedDoctor.name || selectedDoctor.email || 'Unknown Doctor'}
-                          className="w-8 h-8 rounded-full object-cover shrink-0"
-                        />
-                      )}
-                      <div className={`max-w-[70%] px-4 py-2 rounded-2xl shadow-sm text-sm break-words ${msg.senderId === currentUser.uid ? 'bg-green-600 text-white rounded-br-none' : 'bg-white text-gray-900 border border-gray-200 rounded-bl-none'} transition-opacity duration-200 ease-out`}>
-                        <div>{msg.text}</div>
-                        <div className={`text-xs mt-1 ${msg.senderId === currentUser.uid ? 'text-green-200 text-right' : 'text-gray-500 text-left'}`}>{msg.timestamp && new Date(msg.timestamp.seconds ? msg.timestamp.seconds * 1000 : msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-                      </div>
-                      {msg.senderId === currentUser.uid && (
-                        <img
-                          src={msg.senderImage || currentUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser?.displayName || 'Unknown Patient')}&background=E5E7EB&color=374151`}
-                          alt={currentUser.displayName || currentUser.email || 'Unknown Patient'}
-                          className="w-8 h-8 rounded-full object-cover shrink-0"
-                        />
-                      )}
+                {/* Chat Body */}
+                <div ref={chatBodyRef} className="flex-1 overflow-y-auto px-4 py-6 flex flex-col space-y-4 pb-24">
+                  {chatLoading ? (
+                    <div className="text-center text-gray-400 py-8">Loading messages...</div>
+                  ) : chatMessages.length === 0 ? (
+                    <div className="text-center text-gray-400 py-8">No messages yet. Start the conversation!</div>
+                  ) : (
+                    groupedMessages.map((group, gIdx) => (
+                      group[0].system ? (
+                        <div key={group[0].id} className="flex justify-center my-4 animate-slideInCenter">
+                          <div className="flex items-center gap-2 bg-tertiary-100 border border-tertiary-200 text-primary-700 text-xs px-4 py-2 rounded-full shadow font-semibold italic opacity-90">
+                            <BsInfoCircle className="w-4 h-4 text-tertiary-400" />
+                            <span>{group[0].text}</span>
+                          </div>
+                          <span className="block text-[10px] text-gray-400 mt-1 ml-2">{formatTime(group[0].timestamp)}</span>
+                        </div>
+                      ) : (
+                        <div key={group[0].id} className={`flex ${group[0].senderId === currentUser.uid ? 'justify-end' : 'justify-start'} mb-2 animate-slideIn${group[0].senderId === currentUser.uid ? 'Right' : 'Left'}`}> 
+                          <div className="flex items-end gap-2">
+                            {/* Avatar only for first in group, not for self */}
+                            {group[0].senderId !== currentUser.uid && (
+                              <img
+                                src={group[0].senderImage || selectedDoctor?.photoURL || selectedDoctor?.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedDoctor?.displayName || selectedDoctor?.name || selectedDoctor?.email || 'Unknown Doctor')}&background=E5E7EB&color=374151`}
+                                alt={group[0].senderName || 'Doctor'}
+                                className="w-8 h-8 rounded-full object-cover shrink-0 border-2 border-primary-100"
+                              />
+                            )}
+                            <div className="flex flex-col items-end">
+                              {group.map((msg, idx) => (
+                                <div
+                                  key={msg.id}
+                                  className={`max-w-[70vw] px-4 py-2 mb-1 rounded-3xl shadow text-sm break-words transition-all duration-300 ${msg.senderId === currentUser.uid ? 'bg-primary-500 text-white rounded-br-md' : 'bg-white text-gray-900 border border-primary-100 rounded-bl-md'} ${idx === group.length - 1 ? 'mb-0' : ''}`}
+                                  style={{ animation: `bubbleIn 0.3s ${gIdx * 0.05 + idx * 0.01}s both` }}
+                                >
+                                  {msg.text}
+                                  <span className="block text-[10px] text-gray-400 mt-1 text-right">{formatTime(msg.timestamp)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    ))
+                  )}
+                  {/* Typing indicator placeholder (simulate doctor typing for demo) */}
+                  {/* {isTyping && (
+                    <div className="flex items-center space-x-2 mt-2">
+                      <span className="w-2 h-2 bg-primary-400 rounded-full animate-bounce"></span>
+                      <span className="w-2 h-2 bg-primary-400 rounded-full animate-bounce delay-75"></span>
+                      <span className="w-2 h-2 bg-primary-400 rounded-full animate-bounce delay-150"></span>
+                      <span className="text-xs text-primary-400 ml-2">Doctor is typing...</span>
                     </div>
-                  ))
-                )}
-              </div>
-              {/* Chat Input */}
-              <div className="absolute bottom-0 w-full flex items-center gap-3 px-4 py-4 border-t border-gray-100 bg-white rounded-b-3xl">
-                <input
-                  type="text"
-                  placeholder="Type your message..."
-                  className="flex-1 border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
-                  value={chatInput}
-                  onChange={e => setChatInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') handleSendMessage(); }}
-                  autoFocus
-                />
-                <button
-                  className="bg-green-600 text-white px-6 py-3 rounded-xl hover:bg-green-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={handleSendMessage}
-                  disabled={!chatInput.trim()}
-                >
-                  Send
-                </button>
+                  )} */}
+                </div>
+                {/* Chat Input */}
+                <div className="absolute bottom-0 w-full flex items-center gap-3 px-4 py-4 border-t border-primary-100 bg-white rounded-b-3xl">
+                  <input
+                    type="text"
+                    placeholder="Type your message..."
+                    className="flex-1 border border-primary-200 rounded-full px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary-400 focus:border-transparent text-sm bg-primary-50"
+                    value={chatInput}
+                    onChange={e => setChatInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') handleSendMessage(); setIsTyping(true); setTimeout(() => setIsTyping(false), 1200); }}
+                    autoFocus
+                  />
+                  <button
+                    className="bg-primary-600 text-white px-8 py-3 rounded-full hover:bg-primary-700 transition-colors text-base font-semibold disabled:opacity-50 disabled:cursor-not-allowed shadow flex items-center gap-2"
+                    onClick={handleSendMessage}
+                    disabled={!chatInput.trim()}
+                  >
+                    Send
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
+            <VideoCallModal
+              open={videoCallOpen}
+              onClose={() => {
+                setVideoCallOpen(false);
+                addSystemMessage('Video call ended');
+              }}
+              patientName={currentUser?.displayName}
+              doctorName={selectedDoctor?.displayName}
+              onStartCall={() => addSystemMessage('Video call started')}
+            />
+          </>
         )}
 
         {/* Schedule Modal */}

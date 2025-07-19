@@ -212,3 +212,13 @@ export const getMentalHealthTestResultsForUser = async (userId) => {
     throw error;
   }
 };
+
+// Save or update today's mood for a user
+export const saveUserMood = async (userId, date, mood) => {
+  if (!userId || !date || !mood) return;
+  const moodRef = doc(db, 'userProfiles', userId, 'moods', date);
+  await setDoc(moodRef, {
+    mood,
+    timestamp: new Date().toISOString(),
+  }, { merge: true });
+};
