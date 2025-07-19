@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
 const Navbar = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const { currentUser, logout } = useAuth();
   const mobileMenuRef = useRef(null);
+  const location = useLocation();
 
   const handleLogout = async () => {
     try {
@@ -14,6 +15,20 @@ const Navbar = () => {
     } catch (error) {
       console.error('Logout error:', error);
     }
+  };
+
+  // Smooth scroll to element by ID
+  const scrollToSection = (id) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  // For Contact, open mail app
+  const handleContact = (e) => {
+    e.preventDefault();
+    window.location.href = 'mailto:your@email.com';
   };
 
   useEffect(() => {
@@ -43,9 +58,24 @@ const Navbar = () => {
           {/* Navigation Links (Desktop) */}
           <div className='hidden md:flex md:items-center md:space-x-6'>
             <Link to='/' className='text-gray-600 hover:text-gray-800 text-sm font-medium'>Home</Link>
-            <Link to='/about' className='text-gray-600 hover:text-gray-800 text-sm font-medium'>About</Link>
-            <Link to='/services' className='text-gray-600 hover:text-gray-800 text-sm font-medium'>Services</Link>
-            <Link to='/contact' className='text-gray-600 hover:text-gray-800 text-sm font-medium'>Contact</Link>
+            <button
+              className='text-gray-600 hover:text-gray-800 text-sm font-medium bg-transparent border-none outline-none cursor-pointer'
+              onClick={e => { e.preventDefault(); scrollToSection('footer'); }}
+            >
+              About
+            </button>
+            <button
+              className='text-gray-600 hover:text-gray-800 text-sm font-medium bg-transparent border-none outline-none cursor-pointer'
+              onClick={e => { e.preventDefault(); scrollToSection('why-choose'); }}
+            >
+              Services
+            </button>
+            <button
+              className='text-gray-600 hover:text-gray-800 text-sm font-medium bg-transparent border-none outline-none cursor-pointer'
+              onClick={handleContact}
+            >
+              Contact
+            </button>
           </div>
 
           {/* Auth Buttons */}
@@ -116,27 +146,24 @@ const Navbar = () => {
     >
       Home
     </Link>
-    <Link
-      to="/about"
-      className="block text-gray-800 px-4 py-2 rounded-lg text-base font-semibold hover:bg-green-100 transition duration-200"
-      onClick={() => setMenuOpen(false)}
+    <button
+      className="block w-full text-left text-gray-800 px-4 py-2 rounded-lg text-base font-semibold hover:bg-green-100 transition duration-200 bg-transparent border-none outline-none cursor-pointer"
+      onClick={e => { e.preventDefault(); scrollToSection('footer'); setMenuOpen(false); }}
     >
       About
-    </Link>
-    <Link
-      to="/services"
-      className="block text-gray-800 px-4 py-2 rounded-lg text-base font-semibold hover:bg-green-100 transition duration-200"
-      onClick={() => setMenuOpen(false)}
+    </button>
+    <button
+      className="block w-full text-left text-gray-800 px-4 py-2 rounded-lg text-base font-semibold hover:bg-green-100 transition duration-200 bg-transparent border-none outline-none cursor-pointer"
+      onClick={e => { e.preventDefault(); scrollToSection('why-choose'); setMenuOpen(false); }}
     >
       Services
-    </Link>
-    <Link
-      to="/contact"
-      className="block text-gray-800 px-4 py-2 rounded-lg text-base font-semibold hover:bg-green-100 transition duration-200"
-      onClick={() => setMenuOpen(false)}
+    </button>
+    <button
+      className="block w-full text-left text-gray-800 px-4 py-2 rounded-lg text-base font-semibold hover:bg-green-100 transition duration-200 bg-transparent border-none outline-none cursor-pointer"
+      onClick={e => { handleContact(e); setMenuOpen(false); }}
     >
       Contact
-    </Link>
+    </button>
     <div className="space-y-2 flex flex-col">
       {currentUser ? (
          <button className="w-full text-left px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg font-semibold hover:bg-gray-50 transition duration-200 text-sm" onClick={() => { handleLogout(); setMenuOpen(false); }}>

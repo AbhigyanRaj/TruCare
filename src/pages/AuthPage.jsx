@@ -103,12 +103,14 @@ function AuthPage() {
           return;
         }
         await saveUserProfile(result.user, userType);
-        // Redirect based on user type
-        if (userType === 'doctor') {
-          navigate('/dashboard/doctor');
-        } else {
-          navigate('/dashboard');
-        }
+        // Force reload to ensure AuthContext picks up new userRole
+        window.location.reload();
+        // Redirect based on user type (handled after reload)
+        // if (userType === 'doctor') {
+        //   navigate('/dashboard/doctor');
+        // } else {
+        //   navigate('/dashboard');
+        // }
       } else {
         setError("Please send OTP first.");
       }
@@ -130,12 +132,14 @@ function AuthPage() {
         return;
       }
       await saveUserProfile(result.user, userType);
-      // Redirect based on user type
-      if (userType === 'doctor') {
-        navigate('/dashboard/doctor');
-      } else {
-        navigate('/dashboard');
-      }
+      // Force reload to ensure AuthContext picks up new userRole
+      window.location.reload();
+      // Redirect based on user type (handled after reload)
+      // if (userType === 'doctor') {
+      //   navigate('/dashboard/doctor');
+      // } else {
+      //   navigate('/dashboard');
+      // }
     } catch (error) {
       setError(error.message);
       console.error('Google auth error:', error);
