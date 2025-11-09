@@ -79,6 +79,12 @@ const DashboardNavbar = () => {
               >
                 Tests
               </Link>
+              <Link 
+                to='/dashboard/ai-chat' 
+                className={`text-gray-600 hover:text-gray-800 text-sm font-medium ${location.pathname === '/dashboard/ai-chat' ? 'text-green-600' : ''}`}
+              >
+                AI Chat
+              </Link>
               
               <button
                 className={`text-gray-600 hover:text-gray-800 text-sm font-medium bg-transparent border-none outline-none cursor-pointer ${location.pathname === '/dashboard/contact' ? 'text-green-600' : ''}`}
@@ -158,6 +164,13 @@ const DashboardNavbar = () => {
         onClick={() => setMenuOpen(false)}
       >
         Tests
+      </Link>
+      <Link
+        to='/dashboard/ai-chat'
+        className={`block px-4 py-2 rounded-lg text-base font-semibold transition duration-200 ${location.pathname === '/dashboard/ai-chat' ? 'text-green-600 bg-green-100' : 'text-gray-800 hover:bg-green-100'}`}
+        onClick={() => setMenuOpen(false)}
+      >
+        AI Chat
       </Link>
       <button
         className={`block w-full text-left px-4 py-2 rounded-lg text-base font-semibold transition duration-200 bg-transparent border-none outline-none cursor-pointer ${location.pathname === '/dashboard/profile' ? 'text-green-600 bg-green-100' : 'text-gray-800 hover:bg-green-100'}`}

@@ -5,6 +5,7 @@ import { BsInfoCircle } from 'react-icons/bs';
 import { getAllDoctors, scheduleChat, createOrGetChat, sendMessageToChat, listenForChatMessages, listenForChatDocChanges, resetUnreadCount, getChatDocument } from '../services/firestore';
 import MoodTracker from '../components/dashboard/MoodTracker.jsx';
 import VideoCallModal from '../components/dashboard/VideoCallModal.jsx';
+import AITherapistChat from '../components/dashboard/AITherapistChat.jsx';
 
 const Dashboard = () => {
   const { currentUser } = useAuth();
@@ -269,6 +270,14 @@ const Dashboard = () => {
         {/* Mood Tracker Section */}
         <div className="mb-20">
           <MoodTracker />
+        </div>
+
+        {/* AI Therapist Chat Section */}
+        <div className="mb-20">
+          <h2 className="text-lg font-semibold text-gray-800 mb-8 text-left" style={{ fontFamily: 'SF Pro Display, Inter, sans-serif' }}>
+            AI Therapist Support
+          </h2>
+          <AITherapistChat />
         </div>
 
         {/* Chat Modal and Schedule Modal remain unchanged, but benefit from new background and spacing */}

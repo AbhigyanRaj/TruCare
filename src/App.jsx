@@ -10,6 +10,7 @@ import Dashboard from './pages/Dashboard.jsx';
 import DoctorDashboard from './pages/Dashboard/DoctorDashboard.jsx';
 import ChatPage from './pages/Dashboard/ChatPage.jsx';
 import MentalHealthTest from './pages/Dashboard/MentalHealthTest.jsx';
+import AIChat from './pages/AIChat.jsx';
 
 // Basic placeholder components to avoid errors for now
 const Login = () => <div>Login Page</div>;
@@ -78,6 +79,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <ChatPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dashboard/ai-chat"
+              element={
+                <ProtectedRoute>
+                  <AIChat />
                 </ProtectedRoute>
               }
             />
