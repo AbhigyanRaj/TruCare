@@ -1,5 +1,5 @@
-const GEMINI_API_KEY = 'AIzaSyDSO4p4MmOi9vD3BoMoj68wf2tndJvgZcQ';
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent';
+const GEMINI_API_KEY = 'AIzaSyAoJzQB5aPTPDCnyKwVwTtlFkEC-LWv4gE';
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent';
 
 // System prompt to configure Gemini as a therapist
 const THERAPIST_SYSTEM_PROMPT = `You are a compassionate, empathetic, and professional mental health therapist. Your role is to:
